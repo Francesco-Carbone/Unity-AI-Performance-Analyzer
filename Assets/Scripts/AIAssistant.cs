@@ -1,56 +1,112 @@
 ﻿using UnityEngine;
-using TMPro; // Serve per usare i testi a schermo
+using System.Collections;
+using TMPro;
+using System.Linq;
+using ML;
 
 public class AIAssistant : MonoBehaviour
 {
-    [Header("Interfaccia Utente")]
-    public TextMeshProUGUI testoAssistente; // Testo
+    public TextMeshProUGUI testoAssistente;
 
-    [Header("Soglie di Riferimento (Regole IA)")]
-    public float intervalloAnalisi = 1.0f;
-    public float sogliaLag_ms = 33.3f; // Circa 30 FPS
-    public int sogliaBatchesGPU = 5000;
+    [Header("Configurazione Analisi")]
+    public float intervalloAnalisi = 0.5f;
 
-    private float timer = 0f;
+    private float baselineFT = 0f;
+    private float baselineBatches = 0f;
+    private bool calibrato = false;
+    private float timerAnalisi = 0f;
+
+    IEnumerator Start()
+    {
+        MostraMessaggio("AI: Calibrazione hardware in corso...", Color.white);
+
+        float sommaFT = 0;
+        float sommaBatches = 0;
+        int campioni = 0;
+        float t = 0;
+
+        // Fase di calibrazione: 5 secondi per mappare le prestazioni "normali" del PC locale
+        while (t < 5f)
+        {
+            sommaFT += Time.unscaledDeltaTime * 1000f;
+            sommaBatches += UnityEditor.UnityStats.batches;
+            campioni++;
+            t += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        baselineFT = sommaFT / campioni;
+        baselineBatches = sommaBatches / campioni;
+        if (baselineBatches == 0) baselineBatches = 1;
+
+        calibrato = true;
+        MostraMessaggio("AI: Sistema Pronto.", Color.green);
+    }
 
     void Update()
     {
-        timer += Time.unscaledDeltaTime;
+        if (!calibrato) return;
 
-        // Esegue l'analisi a intervalli regolari per non appesantire il gioco
-        if (timer >= intervalloAnalisi)
+        timerAnalisi += Time.unscaledDeltaTime;
+        if (timerAnalisi >= intervalloAnalisi)
         {
-            AnalizzaPrestazioni();
-            timer = 0f;
+            EseguiDiagnosiIA();
+            timerAnalisi = 0f;
         }
     }
 
-    void AnalizzaPrestazioni()
+    void EseguiDiagnosiIA()
     {
-        // 1. Legge i dati attuali
-        float frameTimeCorrente = Time.unscaledDeltaTime * 1000f;
+        // Rilevamento dati attuali
+        float currentFT = Time.unscaledDeltaTime * 1000f;
+        float currentBatches = UnityEditor.UnityStats.batches;
 
-        int batchesCorrenti = UnityEditor.UnityStats.batches;
+        // Calcolo dei Delta (Rapporti relativi rispetto alla calibrazione)
+        double deltaFT = (double)(currentFT / baselineFT);
+        double deltaBatches = (double)(currentBatches / baselineBatches);
 
-        // 2. L'Albero Decisionale dell'IA (Le regole che abbiamo scoperto dai grafici)
-        if (frameTimeCorrente > sogliaLag_ms)
+        // Se le prestazioni sono entro il 20% della norma (Delta tra 0.8 e 1.2), è NORMAL.
+        if (deltaFT < 1.2 && deltaBatches < 1.2)
         {
-            // C'è del lag! Scopriamo il colpevole.
-            if (batchesCorrenti > sogliaBatchesGPU)
+            ApplicaDiagnosi(2); // Forza NORMAL
+            return;
+        }
+
+        // Preparazione Input per il modello [Delta_FT, Delta_Batches]
+        double[] inputIA = new double[] { deltaFT, deltaBatches };
+
+        double[] risultati = AI_Brain.Score(inputIA);
+
+        // Interpretazione del risultato
+        int indiceVincitore = 0;
+        double punteggioMassimo = risultati[0];
+
+        for (int i = 1; i < risultati.Length; i++)
+        {
+            if (risultati[i] > punteggioMassimo)
             {
-                // Regola 1: Alto FrameTime + Alti Batches = Problema GPU
-                MostraMessaggio("AI: Troppi oggetti in scena o luci attive! (Collo di bottiglia GPU)", Color.red);
-            }
-            else
-            {
-                // Regola 2: Alto FrameTime + Batches Normali = Problema CPU
-                MostraMessaggio("AI: Troppi calcoli fisici o script pesanti! (Collo di bottiglia CPU)", new Color(1f, 0.5f, 0f)); // Arancione
+                punteggioMassimo = risultati[i];
+                indiceVincitore = i;
             }
         }
-        else
+
+        // Mappa degli indici (L'ordine alfabetico di Scikit-Learn: CPU_STRESS, GPU_STRESS, NORMAL)
+        ApplicaDiagnosi(indiceVincitore);
+    }
+
+    void ApplicaDiagnosi(int indice)
+    {
+        switch (indice)
         {
-            // Regola 3: FrameTime basso = Tutto ok
-            MostraMessaggio("AI: Prestazioni stabili. Tutto ok.", Color.green);
+            case 0: // CPU_STRESS
+                MostraMessaggio("AI: Rilevato stress CPU (Logica/Fisica pesante)!", new Color(1f, 0.5f, 0f));
+                break;
+            case 1: // GPU_STRESS
+                MostraMessaggio("AI: Rilevato stress GPU (Troppi poligoni/drawcalls)!", Color.red);
+                break;
+            case 2: // NORMAL
+                MostraMessaggio("AI: Performance ottimali.", Color.green);
+                break;
         }
     }
 
