@@ -2,9 +2,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
-import joblib
-import os
 import m2cgen as m2c
+import os
 
 # Configurazione Percorsi
 cartella_training = os.path.dirname(os.path.abspath(__file__))
@@ -17,8 +16,6 @@ if not os.path.exists(percorso_csharp_folder):
     os.makedirs(percorso_csharp_folder)
     print(f"Creata cartella: {percorso_csharp_folder}")
 
-# Logica
-
 # Caricamento con controllo errore
 try:
     df = pd.read_csv(percorso_csv)
@@ -30,26 +27,39 @@ except FileNotFoundError:
 df.columns = df.columns.str.strip()
 print("Classi trovate nel file:", df['Label'].unique())
 
-# Selezione Feature (Input) e Target (Output)
-X = df[['FrameTime_ms', 'Batches_DrawCalls']]
-y = df['Label']
+# 2. Calcolo Baseline (Calibrazione)
+calibration_data = df[df['Label'] == 'CALIBRATION']
+if calibration_data.empty:
+    print("Errore: Fase CALIBRATION non trovata!")
+    exit()
 
-# Split Training e Test set
+base_ft = calibration_data['FrameTime_ms'].mean()
+base_batches = calibration_data['Batches_DrawCalls'].mean()
+if base_batches == 0: base_batches = 1
+
+# 3. Trasformazione in Delta e filtraggio
+df_train = df[df['Label'] != 'CALIBRATION'].copy()
+df_train['Delta_FT'] = df_train['FrameTime_ms'] / base_ft
+df_train['Delta_Batches'] = df_train['Batches_DrawCalls'] / base_batches
+
+# 4. Selezione Feature e Target
+X = df_train[['Delta_FT', 'Delta_Batches']]
+y = df_train['Label']
+
+# 5. Divisione in training e test set (80% training, 20% test)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-model = RandomForestClassifier(n_estimators=100)
+# 6. Addestramento
+model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
 model.fit(X_train, y_train)
 
-# Verifica accuratezza
+# 7. Verifica come si comporta sui dati che non ha mai visto
 y_pred = model.predict(X_test)
+print("\n--- Report di Validazione ---")
 print(classification_report(y_test, y_pred))
 
-# Salva il modello Python
-joblib.dump(model, os.path.join(cartella_training, 'ai_performance_model.pkl'))
-print(f"Modello .pkl salvato in {cartella_training}")
-
-# Esportazione C#
-print("Conversione IA in C#...")
+# 8. Esportazione per Unity
+print("\nGenerazione AI_Brain.cs...")
 codice_csharp = m2c.export_to_c_sharp(model, class_name="AI_Brain")
 
 with open(percorso_csharp_file, "w") as f:
