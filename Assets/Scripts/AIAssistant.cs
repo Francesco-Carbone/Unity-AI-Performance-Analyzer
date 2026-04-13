@@ -18,6 +18,11 @@ public class AIAssistant : MonoBehaviour
 
     IEnumerator Start()
     {
+        MostraMessaggio("AI: Riscaldamento motore...", Color.yellow);
+
+        // Aspetta che Unity superi il lag iniziale
+        yield return new WaitForSeconds(2f);
+
         MostraMessaggio("AI: Calibrazione hardware in corso...", Color.white);
 
         float sommaFT = 0;
@@ -25,8 +30,8 @@ public class AIAssistant : MonoBehaviour
         int campioni = 0;
         float t = 0;
 
-        // Fase di calibrazione: 5 secondi per mappare le prestazioni "normali" del PC locale
-        while (t < 5f)
+        // Fase di calibrazione: 4 secondi per mappare le prestazioni "normali" del PC locale
+        while (t < 4f)
         {
             sommaFT += Time.unscaledDeltaTime * 1000f;
             sommaBatches += UnityEditor.UnityStats.batches;
@@ -57,24 +62,20 @@ public class AIAssistant : MonoBehaviour
 
     void EseguiDiagnosiIA()
     {
-        // Rilevamento dati attuali
-        float currentFT = Time.unscaledDeltaTime * 1000f;
-        float currentBatches = UnityEditor.UnityStats.batches;
+        if (!calibrato) return;
 
-        // Calcolo dei Delta (Rapporti relativi rispetto alla calibrazione)
-        double deltaFT = (double)(currentFT / baselineFT);
-        double deltaBatches = (double)(currentBatches / baselineBatches);
+        double ratioFT = (Time.unscaledDeltaTime * 1000f) / baselineFT;
+        double ratioBT = (double)UnityEditor.UnityStats.batches / baselineBatches;
 
-        // Se le prestazioni sono entro il 20% della norma (Delta tra 0.8 e 1.2), è NORMAL.
-        if (deltaFT < 1.2 && deltaBatches < 1.2)
+        // Se le prestazioni sono entro il 30% forza NORMAL.
+        if (ratioFT < 1.3)
         {
-            ApplicaDiagnosi(2); // Forza NORMAL
+            ApplicaDiagnosi(2); // 2 = NORMAL
             return;
         }
 
         // Preparazione Input per il modello [Delta_FT, Delta_Batches]
-        double[] inputIA = new double[] { deltaFT, deltaBatches };
-
+        double[] inputIA = new double[] { ratioFT, ratioBT };
         double[] risultati = AI_Brain.Score(inputIA);
 
         // Interpretazione del risultato

@@ -4,87 +4,83 @@ using System.Collections.Generic;
 
 public class StressTester : MonoBehaviour
 {
-    [Header("Riferimenti")]
-    public PerformanceLogger logger;
+    [Header("Riferimento")]
+    public PerformanceLogger logger; // Trascina qui l'oggetto che ha il PerformanceLogger
 
-    [Header("Controlli Tastiera")]
-    public KeyCode tastoCPU = KeyCode.Alpha1; // Tasto '1'
-    public KeyCode tastoGPU = KeyCode.Alpha2; // Tasto '2'
-
-    [Header("Stato Test (Sola Lettura)")]
-    public bool stressCPU = false;
-    public bool stressGPU = false;
-
-    [Header("Parametri")]
-    public int intensitaCalcolo = 1000000;
+    [Header("Stato")]
+    [SerializeField] private bool cpuStressAttivo = false;
+    [SerializeField] private int intensitaCpu = 0;
     private List<GameObject> istanzeGPU = new List<GameObject>();
-    private bool calibrazioneFinita = false;
 
     IEnumerator Start()
     {
+        // Fase iniziale: Calibrazione
         if (logger != null) logger.scenarioLabel = "CALIBRATION";
-        yield return new WaitForSeconds(6f); // Aspetta la calibrazione dell'IA
+        Debug.Log("Fase di CALIBRAZIONE attiva per 6 secondi...");
 
-        calibrazioneFinita = true;
+        yield return new WaitForSeconds(6f);
+
+        // Dopo 6 secondi passa
         if (logger != null) logger.scenarioLabel = "NORMAL";
-        Debug.Log("SISTEMA PRONTO: Premi '1' per CPU Stress, '2' per GPU Stress");
+        Debug.Log("SISTEMA PRONTO: Ora puoi usare i tasti 1-6");
     }
 
     void Update()
     {
-        if (!calibrazioneFinita) return;
+        // --- LIVELLI CPU ---
+        if (Input.GetKeyDown(KeyCode.Alpha1)) AttivaStressCPU(100000, "CPU_STRESS");
+        if (Input.GetKeyDown(KeyCode.Alpha2)) AttivaStressCPU(1000000, "CPU_STRESS");
+        if (Input.GetKeyDown(KeyCode.Alpha3)) AttivaStressCPU(5000000, "CPU_STRESS");
 
-        // Toggle Stress CPU con tasto 1
-        if (Input.GetKeyDown(tastoCPU))
+        // --- LIVELLI GPU ---
+        if (Input.GetKeyDown(KeyCode.Alpha4)) AttivaStressGPU(500, "GPU_STRESS");
+        if (Input.GetKeyDown(KeyCode.Alpha5)) AttivaStressGPU(3000, "GPU_STRESS");
+        if (Input.GetKeyDown(KeyCode.Alpha6)) AttivaStressGPU(15000, "GPU_STRESS");
+
+        // --- RESET ---
+        if (Input.GetKeyDown(KeyCode.Space)) FermaTutto();
+
+        if (cpuStressAttivo)
         {
-            stressCPU = !stressCPU;
-            AggiornaLabel();
+            double dummy = 0;
+            for (int i = 0; i < intensitaCpu; i++) { dummy += Mathf.Sqrt(i); }
         }
-
-        // Toggle Stress GPU con tasto 2
-        if (Input.GetKeyDown(tastoGPU))
-        {
-            stressGPU = !stressGPU;
-            AggiornaLabel();
-        }
-
-        EseguiStress();
     }
 
-    void AggiornaLabel()
+    void AttivaStressCPU(int intensita, string label)
     {
-        if (logger == null) return;
-
-        if (stressGPU) logger.scenarioLabel = "GPU_STRESS";
-        else if (stressCPU) logger.scenarioLabel = "CPU_STRESS";
-        else logger.scenarioLabel = "NORMAL";
+        FermaTutto();
+        intensitaCpu = intensita;
+        cpuStressAttivo = true;
+        if (logger != null) logger.scenarioLabel = label;
+        Debug.Log($"Attivato {label} - Intensità: {intensita}");
     }
 
-    void EseguiStress()
+    void AttivaStressGPU(int numeroOggetti, string label)
     {
-        // Logica CPU
-        if (stressCPU)
-        {
-            for (int i = 0; i < intensitaCalcolo; i++)
-            {
-                float valore = Mathf.Sqrt(Random.value) * Mathf.Exp(Random.value);
-            }
-        }
+        FermaTutto();
+        if (logger != null) logger.scenarioLabel = label;
 
-        // Logica GPU
-        if (stressGPU && istanzeGPU.Count < 10000)
+        Material mat = new Material(Shader.Find("Standard"));
+        for (int i = 0; i < numeroOggetti; i++)
         {
-            for (int i = 0; i < 100; i++)
-            {
-                GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                go.transform.position = Random.insideUnitSphere * 20;
-                istanzeGPU.Add(go);
-            }
+            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.transform.position = Random.insideUnitSphere * 15f;
+            Destroy(go.GetComponent<SphereCollider>());
+            go.GetComponent<MeshRenderer>().material = mat;
+            istanzeGPU.Add(go);
         }
-        else if (!stressGPU && istanzeGPU.Count > 0)
-        {
-            foreach (GameObject obj in istanzeGPU) Destroy(obj);
-            istanzeGPU.Clear();
-        }
+        Debug.Log($"Attivato {label} - Oggetti: {numeroOggetti}");
+    }
+
+    void FermaTutto()
+    {
+        cpuStressAttivo = false;
+        intensitaCpu = 0;
+        if (logger != null) logger.scenarioLabel = "NORMAL";
+
+        foreach (var clone in istanzeGPU) { if (clone != null) Destroy(clone); }
+        istanzeGPU.Clear();
+        Debug.Log("Reset: Ritorno a NORMAL");
     }
 }
