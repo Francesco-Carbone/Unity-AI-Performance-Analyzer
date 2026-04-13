@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
@@ -33,8 +34,8 @@ if calibration_data.empty:
     print("Errore: Fase CALIBRATION non trovata!")
     exit()
 
-base_ft = calibration_data['FrameTime_ms'].mean()
-base_batches = calibration_data['Batches_DrawCalls'].mean()
+base_ft = calibration_data['FrameTime_ms'].median()
+base_batches = calibration_data['Batches_DrawCalls'].median()
 if base_batches == 0: base_batches = 1
 
 # 3. Trasformazione in Delta e filtraggio
