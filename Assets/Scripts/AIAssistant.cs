@@ -13,8 +13,18 @@ public class AIAssistant : MonoBehaviour
 
     private float baselineFT = 0f;
     private float baselineBatches = 0f;
+    private float baselineCPU = 0f;
+
     private bool calibrato = false;
     private float timerAnalisi = 0f;
+
+    private float lastFrameStartTime = 0f;
+    private float currentCpuTime = 0f;
+
+    void Awake()
+    {
+        lastFrameStartTime = Time.realtimeSinceStartup;
+    }
 
     IEnumerator Start()
     {
@@ -27,14 +37,16 @@ public class AIAssistant : MonoBehaviour
 
         float sommaFT = 0;
         float sommaBatches = 0;
+        float sommaCPU = 0;
         int campioni = 0;
         float t = 0;
 
-        // Fase di calibrazione: 4 secondi per mappare le prestazioni "normali" del PC locale
+        // Fase di calibrazione: 4 secondi per mappare le prestazioni standard del PC locale
         while (t < 4f)
         {
             sommaFT += Time.unscaledDeltaTime * 1000f;
             sommaBatches += UnityEditor.UnityStats.batches;
+            sommaCPU += currentCpuTime;
             campioni++;
             t += Time.unscaledDeltaTime;
             yield return null;
@@ -42,7 +54,10 @@ public class AIAssistant : MonoBehaviour
 
         baselineFT = sommaFT / campioni;
         baselineBatches = sommaBatches / campioni;
-        if (baselineBatches == 0) baselineBatches = 1;
+        baselineCPU = sommaCPU / campioni;
+
+        if (baselineBatches <= 0) baselineBatches = 1;
+        if (baselineCPU <= 0) baselineCPU = baselineFT * 0.5f;
 
         calibrato = true;
         MostraMessaggio("AI: Sistema Pronto.", Color.green);
@@ -50,6 +65,10 @@ public class AIAssistant : MonoBehaviour
 
     void Update()
     {
+        float frameStart = Time.realtimeSinceStartup;
+        currentCpuTime = (frameStart - lastFrameStartTime) * 1000f;
+        lastFrameStartTime = frameStart;
+
         if (!calibrato) return;
 
         timerAnalisi += Time.unscaledDeltaTime;
@@ -66,6 +85,7 @@ public class AIAssistant : MonoBehaviour
 
         double ratioFT = (Time.unscaledDeltaTime * 1000f) / baselineFT;
         double ratioBT = (double)UnityEditor.UnityStats.batches / baselineBatches;
+        double ratioCPU = (double)currentCpuTime / baselineCPU;
 
         // Se le prestazioni sono entro il 30% forza NORMAL.
         if (ratioFT < 1.3)
@@ -75,7 +95,7 @@ public class AIAssistant : MonoBehaviour
         }
 
         // Preparazione Input per il modello [Delta_FT, Delta_Batches]
-        double[] inputIA = new double[] { ratioFT, ratioBT };
+        double[] inputIA = new double[] { ratioFT, ratioBT, ratioCPU };
         double[] risultati = AI_Brain.Score(inputIA);
 
         // Interpretazione del risultato
