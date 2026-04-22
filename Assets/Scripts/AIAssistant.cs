@@ -8,8 +8,16 @@ public class AIAssistant : MonoBehaviour
 {
     public TextMeshProUGUI testoAssistente;
 
-    [Header("Configurazione Analisi")]
+    public enum TipoIA { Random_Forest_Precisa, Decision_Tree_Veloce }
+
+    [Header("Configurazione")]
+    public TipoIA modelloDaUsare = TipoIA.Decision_Tree_Veloce;
     public float intervalloAnalisi = 0.5f;
+
+    [Header("Debug Ratios (Sola Lettura)")]
+    public float ratio_FrameTime;
+    public float ratio_Batches;
+    public float ratio_CPU;
 
     private float baselineFT = 0f;
     private float baselineBatches = 0f;
@@ -18,17 +26,12 @@ public class AIAssistant : MonoBehaviour
     private bool calibrato = false;
     private float timerAnalisi = 0f;
 
-    private float lastFrameStartTime = 0f;
-    private float currentCpuTime = 0f;
-
-    void Awake()
-    {
-        lastFrameStartTime = Time.realtimeSinceStartup;
-    }
+    private double startTimeFrame;
+    private float cpuTimeMS;
 
     IEnumerator Start()
     {
-        MostraMessaggio("AI: Riscaldamento motore...", Color.yellow);
+        MostraMessaggio("AI: Riscaldamento...", Color.yellow);
 
         // Aspetta che Unity superi il lag iniziale
         yield return new WaitForSeconds(2f);
@@ -46,7 +49,7 @@ public class AIAssistant : MonoBehaviour
         {
             sommaFT += Time.unscaledDeltaTime * 1000f;
             sommaBatches += UnityEditor.UnityStats.batches;
-            sommaCPU += currentCpuTime;
+            sommaCPU += cpuTimeMS;
             campioni++;
             t += Time.unscaledDeltaTime;
             yield return null;
@@ -65,9 +68,12 @@ public class AIAssistant : MonoBehaviour
 
     void Update()
     {
-        float frameStart = Time.realtimeSinceStartup;
-        currentCpuTime = (frameStart - lastFrameStartTime) * 1000f;
-        lastFrameStartTime = frameStart;
+        startTimeFrame = (double)Time.realtimeSinceStartup;
+    }
+
+    void LateUpdate()
+    {
+        cpuTimeMS = (float)((double)Time.realtimeSinceStartup - startTimeFrame) * 1000f;
 
         if (!calibrato) return;
 
@@ -85,7 +91,12 @@ public class AIAssistant : MonoBehaviour
 
         double ratioFT = (Time.unscaledDeltaTime * 1000f) / baselineFT;
         double ratioBT = (double)UnityEditor.UnityStats.batches / baselineBatches;
-        double ratioCPU = (double)currentCpuTime / baselineCPU;
+        double ratioCPU = (double)cpuTimeMS / baselineCPU;
+
+        // Aggiorna info nell'Inspector
+        ratio_FrameTime = (float)ratioFT;
+        ratio_Batches = (float)ratioBT;
+        ratio_CPU = (float)ratioCPU;
 
         // Se le prestazioni sono entro il 30% forza NORMAL.
         if (ratioFT < 1.3)
@@ -94,9 +105,18 @@ public class AIAssistant : MonoBehaviour
             return;
         }
 
-        // Preparazione Input per il modello [Delta_FT, Delta_Batches]
+        // Preparazione Input per il modello
         double[] inputIA = new double[] { ratioFT, ratioBT, ratioCPU };
-        double[] risultati = AI_Brain.Score(inputIA);
+        double[] risultati;
+
+        if (modelloDaUsare == TipoIA.Random_Forest_Precisa)
+        {
+            risultati = ML.AI_Brain.Score(inputIA);
+        }
+        else
+        {
+            risultati = ML.AI_Brain_Fast.Score(inputIA);
+        }
 
         // Interpretazione del risultato
         int indiceVincitore = 0;
@@ -117,17 +137,13 @@ public class AIAssistant : MonoBehaviour
 
     void ApplicaDiagnosi(int indice)
     {
+        string prefisso = (modelloDaUsare == TipoIA.Random_Forest_Precisa) ? "[RF] " : "[Tree] ";
+
         switch (indice)
         {
-            case 0: // CPU_STRESS
-                MostraMessaggio("AI: Rilevato stress CPU (Logica/Fisica pesante)!", new Color(1f, 0.5f, 0f));
-                break;
-            case 1: // GPU_STRESS
-                MostraMessaggio("AI: Rilevato stress GPU (Troppi poligoni/drawcalls)!", Color.red);
-                break;
-            case 2: // NORMAL
-                MostraMessaggio("AI: Performance ottimali.", Color.green);
-                break;
+            case 0: MostraMessaggio(prefisso + "Stress CPU!", new Color(1f, 0.5f, 0f)); break;
+            case 1: MostraMessaggio(prefisso + "Stress GPU!", Color.red); break;
+            case 2: MostraMessaggio(prefisso + "Performance OK", Color.green); break;
         }
     }
 

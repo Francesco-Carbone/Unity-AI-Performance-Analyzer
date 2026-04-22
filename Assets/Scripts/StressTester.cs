@@ -5,11 +5,15 @@ using System.Collections.Generic;
 public class StressTester : MonoBehaviour
 {
     [Header("Riferimento")]
-    public PerformanceLogger logger; // Trascina qui l'oggetto che ha il PerformanceLogger
+    public PerformanceLogger logger;
 
-    [Header("Stato")]
-    [SerializeField] private bool cpuStressAttivo = false;
-    [SerializeField] private int intensitaCpu = 0;
+    [Header("Stato Stress CPU")]
+    public bool cpuStressAttivo = false;
+    public int intensitaCpu = 0;
+
+    [Header("Stato Stress GPU")]
+    public bool gpuStressAttivo = false;
+    public int numeroOggettiGpu = 0;
     private List<GameObject> istanzeGPU = new List<GameObject>();
 
     IEnumerator Start()
@@ -59,6 +63,8 @@ public class StressTester : MonoBehaviour
     void AttivaStressGPU(int numeroOggetti, string label)
     {
         FermaTutto();
+        gpuStressAttivo = true;
+        numeroOggettiGpu = numeroOggetti;
         if (logger != null) logger.scenarioLabel = label;
 
         Material mat = new Material(Shader.Find("Standard"));
