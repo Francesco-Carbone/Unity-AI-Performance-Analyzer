@@ -14,6 +14,11 @@ public class AIAssistant : MonoBehaviour
     public TipoIA modelloDaUsare = TipoIA.Decision_Tree_Veloce;
     public float intervalloAnalisi = 0.5f;
 
+    [Header("Sensibilità IA")]
+    [Tooltip("Soglia di allarme: 1.1 = Molto Sensibile (+10% lag), 2.0 = Poco Sensibile (+100% lag).")]
+    [Range(1.05f, 3f)]
+    public float sogliaAllarme = 1.3f;
+
     [Header("Debug Ratios (Sola Lettura)")]
     public float ratio_FrameTime;
     public float ratio_Batches;
@@ -98,8 +103,8 @@ public class AIAssistant : MonoBehaviour
         ratio_Batches = (float)ratioBT;
         ratio_CPU = (float)ratioCPU;
 
-        // Se le prestazioni sono entro il 30% forza NORMAL.
-        if (ratioFT < 1.3)
+        // Se le prestazioni sono entro il cap forza NORMAL.
+        if (ratioFT < sogliaAllarme)
         {
             ApplicaDiagnosi(2); // 2 = NORMAL
             return;
