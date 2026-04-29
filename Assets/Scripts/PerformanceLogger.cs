@@ -1,34 +1,51 @@
 ﻿using UnityEngine;
 using System.IO;
-using UnityEditor; // Solo per usare UnityStats nell'editor
 
 public class PerformanceLogger : MonoBehaviour
 {
     private string filePath;
     private float timer = 0f;
-    public float logInterval = 0.5f; // Salva i dati ogni mezzo secondo
-    public string scenarioLabel = "Stress GPU";
+    public float logInterval = 0.5f;
 
-    void Start()
+    // Etichetta cambiata da StressTester
+    [HideInInspector] public string scenarioLabel = "CALIBRATION";
+
+    private float lastLogFrameTime = 0f;
+    private float actualCpuMeasured = 0f;
+
+    void Awake()
     {
-        // Crea il file CSV nella cartella del progetto
+        lastLogFrameTime = Time.realtimeSinceStartup;
 
-        filePath = Application.dataPath + "/PerformanceData.csv";
+        // Pathfinder
+        string rootPath = Directory.GetParent(Application.dataPath).FullName;
+        filePath = Path.Combine(rootPath, "PerformanceData.csv");
 
-        // Scrive l'intestazione del file (solo se non esiste)
-        if (!File.Exists(filePath))
+        UnityEngine.Debug.Log("<color=cyan>Percorso finale rilevato: </color>" + filePath);
+
+        // Crea il file di log
+        try
         {
-            File.WriteAllText(filePath, "Label,Time_sec,FrameTime_ms,FPS,Batches_DrawCalls\n");
+            // Scrive l'intestazione
+            if (!File.Exists(filePath))
+            {
+                File.WriteAllText(filePath, "Label,Time_sec,FrameTime_ms,FPS,Batches_DrawCalls,MainThreadTime_ms\n");
+            }
+            UnityEngine.Debug.Log("<color=green>File CSV inizializzato con successo!</color>");
         }
-
-        Debug.Log("Inizio registrazione dati in: " + filePath);
-
+        catch (System.Exception e)
+        {
+            UnityEngine.Debug.LogError("ERRORE CRITICO: Impossibile creare il file. " + e.Message);
+        }
     }
 
     void Update()
     {
-        timer += Time.unscaledDeltaTime;
+        float startTime = Time.realtimeSinceStartup;
+        actualCpuMeasured = (startTime - lastLogFrameTime) * 1000f;
+        lastLogFrameTime = startTime;
 
+        timer += Time.unscaledDeltaTime;
         if (timer >= logInterval)
         {
             LogData();
@@ -39,16 +56,16 @@ public class PerformanceLogger : MonoBehaviour
     void LogData()
     {
         float frameTime = Time.unscaledDeltaTime * 1000f;
-        float fps = 1.0f / Time.unscaledDeltaTime;
+        float fps = (Time.unscaledDeltaTime > 0) ? 1.0f / Time.unscaledDeltaTime : 0;
+        int batches = 0;
 
-        // UnityStats.batches funziona solo all intero dell'Editor di Unity.
-        int batches = UnityEditor.UnityStats.batches;
+        float cpuMainTime = actualCpuMeasured;
 
-        // Formatta la riga CSV
-        string dataRow = string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0},{1:F2},{2:F2},{3:F0},{4}\n", scenarioLabel, Time.time, frameTime, fps, batches);
+#if UNITY_EDITOR
+        batches = UnityEditor.UnityStats.batches;
+#endif
 
-        File.AppendAllText(filePath, dataRow);
-
+        string riga = string.Format(System.Globalization.CultureInfo.InvariantCulture,"{0},{1:F2},{2:F2},{3:F0},{4},{5:F2}\n", scenarioLabel, Time.timeSinceLevelLoad, frameTime, fps, batches, cpuMainTime);
+        File.AppendAllText(filePath, riga);
     }
-
 }
