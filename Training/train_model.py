@@ -39,6 +39,7 @@ if calibration_data.empty:
 base_ft = calibration_data['FrameTime_ms'].median()
 base_batches = calibration_data['Batches_DrawCalls'].median()
 base_cpu = calibration_data['MainThreadTime_ms'].median()
+base_mem = calibration_data['Memory_MB'].median()
 
 if base_batches == 0: base_batches = 1
 if base_cpu == 0: base_cpu = 1
@@ -48,9 +49,10 @@ df_train = df[df['Label'] != 'CALIBRATION'].copy()
 df_train['Delta_FT'] = df_train['FrameTime_ms'] / base_ft
 df_train['Delta_Batches'] = df_train['Batches_DrawCalls'] / base_batches
 df_train['Delta_CPU'] = df_train['MainThreadTime_ms'] / base_cpu
+df_train['Delta_Mem'] = df_train['Memory_MB'] / base_mem
 
 # Selezione Feature e Target
-X = df_train[['Delta_FT', 'Delta_Batches', 'Delta_CPU']]
+X = df_train[['Delta_FT', 'Delta_Batches', 'Delta_CPU', 'Delta_Mem']]
 y = df_train['Label']
 
 # Divisione in training e test set (80% training, 20% test)
@@ -58,7 +60,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 
 # Addestramento
 print("\n--- Addestramento Modello 1: Random Forest ---")
-model_rf = RandomForestClassifier(n_estimators=25, max_depth=4, random_state=42)
+model_rf = RandomForestClassifier(n_estimators=30, max_depth=5, random_state=42)
 model_rf.fit(X_train, y_train)
 
 # Verifica come si comporta sui dati che non ha mai visto
@@ -75,7 +77,7 @@ with open(percorso_csharp_file_rf, "w") as f:
 
 # Seconda versione addestramento
 print("\n--- Addestramento Modello 2: Singolo Albero ---")
-model_tree = DecisionTreeClassifier(max_depth=4, random_state=42)
+model_tree = DecisionTreeClassifier(max_depth=5, random_state=42)
 model_tree.fit(X_train, y_train)
 
 y_pred_tree = model_tree.predict(X_test)
