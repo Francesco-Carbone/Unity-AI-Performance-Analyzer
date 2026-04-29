@@ -3,3 +3,4 @@ scikit-learn
 joblib
 m2cgen
 matplotlib
+numpy
