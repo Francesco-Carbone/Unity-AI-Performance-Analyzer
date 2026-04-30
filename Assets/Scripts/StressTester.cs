@@ -8,19 +8,19 @@ public class StressTester : MonoBehaviour
     public PerformanceLogger logger;
 
     [Header("Stato Stress Attuale")]
-    public bool cpuStressAttivo = false;
+    public bool cpuStress = false;
     public int intensitaCpu = 0;
 
-    public bool gpuStressAttivo = false;
-    public int numeroOggettiGpu = 0;
+    public bool gpuStress = false;
+    public int numOggettiGpu = 0;
     private List<GameObject> istanzeGPU = new List<GameObject>();
 
-    public bool physicsStressAttivo = false;
-    public int numeroOggettiFisici = 0;
+    public bool physicsStress = false;
+    public int numOggettiFisici = 0;
     private List<GameObject> istanzeFisica = new List<GameObject>();
 
-    public bool memoryStressAttivo = false;
-    public int mbDaAllocarePerFrame = 0;
+    public bool memoryStress = false;
+    public int mbAllocataFrame = 0;
 
     IEnumerator Start()
     {
@@ -57,16 +57,16 @@ public class StressTester : MonoBehaviour
         // Reset
         if (Input.GetKeyDown(KeyCode.Space)) FermaTutto();
 
-        if (cpuStressAttivo)
+        if (cpuStress)
         {
             double dummy = 0;
             for (int i = 0; i < intensitaCpu; i++) { dummy += Mathf.Sqrt(i); }
         }
 
-        if (memoryStressAttivo)
+        if (memoryStress)
         {
             // Alloca array enormi ogni frame per forzare il Garbage Collector
-            byte[] spazzatura = new byte[1024 * 1024 * mbDaAllocarePerFrame];
+            byte[] spazzatura = new byte[1024 * 1024 * mbAllocataFrame];
         }
     }
 
@@ -74,7 +74,7 @@ public class StressTester : MonoBehaviour
     {
         FermaTutto();
         intensitaCpu = intensita;
-        cpuStressAttivo = true;
+        cpuStress = true;
         SetLabel(label);
         //Debug.Log($"Attivato {label} - Intensità: {intensita}");
     }
@@ -82,8 +82,8 @@ public class StressTester : MonoBehaviour
     void AttivaStressGPU(int numeroOggetti, string label)
     {
         FermaTutto();
-        gpuStressAttivo = true;
-        numeroOggettiGpu = numeroOggetti;
+        gpuStress = true;
+        numOggettiGpu = numeroOggetti;
         SetLabel(label);
 
         Material mat = new Material(Shader.Find("Standard"));
@@ -101,17 +101,28 @@ public class StressTester : MonoBehaviour
     void AttivaStressFisica(int numeroOggetti, string label)
     {
         FermaTutto();
-        physicsStressAttivo = true;
-        numeroOggettiFisici = numeroOggetti;
+        physicsStress = true;
+        numOggettiFisici = numeroOggetti;
         SetLabel(label);
 
-        Material mat = new Material(Shader.Find("Standard"));
+        PhysicMaterial highFrictionMat = new PhysicMaterial();
+        highFrictionMat.bounciness = 1f;
+        highFrictionMat.bounceCombine = PhysicMaterialCombine.Maximum;
+
         for (int i = 0; i < numeroOggetti; i++)
         {
-            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.transform.position = new Vector3(Random.Range(-5f, 5f), Random.Range(10f, 50f), Random.Range(-5f, 5f));
-            go.AddComponent<Rigidbody>(); // Aggiunge gravità e collisioni
-            go.GetComponent<MeshRenderer>().material = mat;
+            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+
+            go.transform.position = new Vector3(Random.Range(-2f, 2f), Random.Range(5f, 25f), Random.Range(-2f, 2f));
+            go.transform.localScale = Vector3.one * 0.5f;
+
+            Rigidbody rb = go.AddComponent<Rigidbody>();
+            rb.mass = 1f;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            rb.collisionDetectionMode = CollisionDetectionMode.Continuous; // Forza calcoli fisici estremi
+
+            go.GetComponent<SphereCollider>().sharedMaterial = highFrictionMat;
+
             istanzeFisica.Add(go);
         }
     }
@@ -119,8 +130,8 @@ public class StressTester : MonoBehaviour
     void AttivaStressMemoria(int mb, string label)
     {
         FermaTutto();
-        memoryStressAttivo = true;
-        mbDaAllocarePerFrame = mb;
+        memoryStress = true;
+        mbAllocataFrame = mb;
         SetLabel(label);
     }
 
@@ -132,7 +143,7 @@ public class StressTester : MonoBehaviour
 
     void FermaTutto()
     {
-        cpuStressAttivo = false; gpuStressAttivo = false; physicsStressAttivo = false; memoryStressAttivo = false;
+        cpuStress = false; gpuStress = false; physicsStress = false; memoryStress = false;
         SetLabel("NORMAL");
         foreach (var clone in istanzeGPU)
         {
