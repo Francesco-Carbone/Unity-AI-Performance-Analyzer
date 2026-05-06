@@ -24,6 +24,7 @@ public class AIAssistant : MonoBehaviour
     public int tempoPerRipristino = 15; // Quanti cicli "Normal" servono per rialzare la qualità
 
     private float cooldownAttuale = 0f;
+    private int contatoreNormal = 0;
 
     // Variabili per salvare lo stato originale del progetto
     private int originalFrameRate;
@@ -82,12 +83,10 @@ public class AIAssistant : MonoBehaviour
 
         // Fase di calibrazione: 4 secondi per mappare le prestazioni standard del PC locale
         while (t < 4f)
-        {
-            float cpuTimeMs = GetCPUTime();
-
+        { 
             sommaFT += Time.unscaledDeltaTime * 1000f;
             sommaBatches += UnityEditor.UnityStats.batches;
-            sommaCPU += cpuTimeMs;
+            sommaCPU += GetCPUTime();
             sommaMemory += System.GC.GetTotalMemory(false) / 1048576f;
             campioni++;
             t += Time.unscaledDeltaTime;
@@ -132,8 +131,6 @@ public class AIAssistant : MonoBehaviour
 
     void EseguiDiagnosiIA()
     {
-        if (!calibrato) return;
-
         float currentCPU = GetCPUTime();
 
         double ratioFT = (Time.unscaledDeltaTime * 1000f) / baselineFT;
@@ -146,9 +143,6 @@ public class AIAssistant : MonoBehaviour
         ratio_Batches = (float)ratioBT;
         ratio_CPU = (float)ratioCPU;
         ratio_Memory = (float)ratioMem;
-
-        bool isLocked = (Application.targetFrameRate == 30);
-        bool isPerformanceOk = isLocked ? (ratioCPU < sogliaAllarme) : (ratioFT < sogliaAllarme);
 
         // Se le prestazioni sono entro il cap forza NORMAL.
         if (ratioFT < sogliaAllarme)
@@ -183,7 +177,6 @@ public class AIAssistant : MonoBehaviour
             }
         }
 
-        // Mappa degli indici (L'ordine alfabetico di Scikit-Learn: CPU_STRESS, GPU_STRESS, NORMAL)
         ApplicaDiagnosi(indiceVincitore);
     }
 
@@ -201,15 +194,33 @@ public class AIAssistant : MonoBehaviour
             case 4: MostraMessaggio(prefisso + "Stress Fisica!", Color.cyan); break;
         }
 
-        if (!correzioneAutomatica || cooldownAttuale > 0) return;
+        if (!correzioneAutomatica) return;
 
         // Gestione Logica Autopilota
-        if (indice == 3) Ripristina(); 
-        else Intervieni(indice);
+        if (indice == 3) // Stato NORMAL
+        {
+            contatoreNormal++;
+            // Ripristina se è stato normale per 15 cicli (7.5 secondi) e il cooldown è finito
+            if (contatoreNormal >= tempoPerRipristino && cooldownAttuale <= 0)
+            {
+                Ripristina();
+                contatoreNormal = 0;
+            }
+        }
+        else // Stato di STRESS
+        {
+            contatoreNormal = 0;
+            if (cooldownAttuale <= 0)
+            {
+                Intervieni(indice);
+            }
+        }
     }
 
     void Intervieni(int tipo)
     {
+        cooldownAttuale = tempoDiCooldown;
+
         switch (tipo)
         {
             case 0: // CPU
@@ -239,10 +250,11 @@ public class AIAssistant : MonoBehaviour
     void Ripristina()
     {
         // Se è già ai valori originali, non fa nulla
-        if (Application.targetFrameRate == originalFrameRate && QualitySettings.lodBias == originalLODBias &&
-            QualitySettings.shadowDistance == originalShadowDistance && QualitySettings.lodBias == originalLODBias) return;
+        if(Application.targetFrameRate == originalFrameRate && QualitySettings.lodBias == originalLODBias &&
+            QualitySettings.shadowDistance == originalShadowDistance && QualitySettings.masterTextureLimit == originalTextureLimit) return;
 
-        cooldownAttuale = 1.0f; // Reset più veloce
+        cooldownAttuale = 2.0f; // Mette in pausa per 2 secondi per stabilizzare
+
         Application.targetFrameRate = originalFrameRate;
         QualitySettings.shadowDistance = originalShadowDistance;
         QualitySettings.lodBias = originalLODBias;
@@ -252,7 +264,7 @@ public class AIAssistant : MonoBehaviour
         Time.fixedDeltaTime = 0.02f;
         Physics.defaultSolverIterations = 6;
 
-        Debug.Log("<color=cyan>[AI]</color> Prestazioni tornate normali. Ripristino impostazioni.");
+        Debug.Log("<color=green>[AI]</color> Prestazioni tornate normali. Ripristino impostazioni.");
     }
 
     void MostraMessaggio(string messaggio, Color colore)
