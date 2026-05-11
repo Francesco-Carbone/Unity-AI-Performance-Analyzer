@@ -265,6 +265,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5877928559889856127}
   - component: {fileID: 5877928559889856124}
+  - component: {fileID: 1632815023}
   m_Layer: 0
   m_Name: AIManager
   m_TagString: Untagged
@@ -302,6 +303,26 @@ MonoBehaviour:
   testoAssistente: {fileID: 5877928558167260801}
   modelloDaUsare: 0
   intervalloAnalisi: 1
+  sogliaAllarme: 1.3
+  heatmapLogger: {fileID: 1632815023}
+  correzioneAutomatica: 1
+  tempoDiCooldown: 5
+  tempoPerRipristino: 10
+  risoluzioneMinima: 0.5
+  stepRisoluzione: 0.15
   ratio_FrameTime: 0
   ratio_Batches: 0
   ratio_CPU: 0
+  ratio_Memory: 0
+--- !u!114 &1632815023
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5877928559889856125}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0c0c531a6330fb144b08f138ed309d88, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
