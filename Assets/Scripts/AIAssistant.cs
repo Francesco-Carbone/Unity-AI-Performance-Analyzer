@@ -18,15 +18,25 @@ public class AIAssistant : MonoBehaviour
     [Range(1.05f, 3f)]
     public float sogliaAllarme = 1.3f;
 
+    [Header("Telemetria")]
+    public PerformanceHeatmap heatmapLogger;
+
     [Header("Autopilota Prestazioni")]
     public bool correzioneAutomatica = true;
     public float tempoDiCooldown = 5.0f; // Secondi tra un intervento e l'altro
-    public int tempoPerRipristino = 15; // Quanti cicli "Normal" servono per rialzare la qualità
+    public int tempoPerRipristino = 10; // Quanti cicli "Normal" servono per rialzare la qualità
 
     private float cooldownAttuale = 0f;
     private int contatoreNormal = 0;
 
-    // Variabili per salvare lo stato originale del progetto
+    [Header("Dynamic Resolution (DRS)")] //Necessario attivare l opzione Dynamic Resolution della Main Camera
+    [Tooltip("Limite minimo di risoluzione (0.5 = 50% della risoluzione originale)")]
+    public float risoluzioneMinima = 0.5f;
+    [Tooltip("Di quanto abbassare la risoluzione ad ogni intervento (0.15 = -15%)")]
+    public float stepRisoluzione = 0.15f;
+    private float risoluzioneAttuale = 1.0f;
+
+    // Variabili per salvare lo stato originale
     private int originalFrameRate;
     private float originalLODBias;
     private int originalVSync;
@@ -220,38 +230,59 @@ public class AIAssistant : MonoBehaviour
     void Intervieni(int tipo)
     {
         cooldownAttuale = tempoDiCooldown;
+        string nomeProblema = "";
 
         switch (tipo)
         {
             case 0: // CPU
+                nomeProblema = "CPU";
                 QualitySettings.lodBias = 0.1f;
                 QualitySettings.maximumLODLevel = 2;
                 Debug.Log("<color=orange>[AI]</color> CPU Fix");
                 break;
             case 1: // GPU
-                QualitySettings.shadowDistance = 0f; // Disabilita totalmente le ombre
-                QualitySettings.masterTextureLimit = 1; // Dimezza risoluzione texture
-                Debug.Log("<color=red>[AI]</color> GPU Fix");
+                nomeProblema = "GPU";
+                if (risoluzioneAttuale > risoluzioneMinima)
+                {
+                    risoluzioneAttuale = Mathf.Max(risoluzioneMinima, risoluzioneAttuale - stepRisoluzione);
+                    ScalableBufferManager.ResizeBuffers(risoluzioneAttuale, risoluzioneAttuale);
+                    Debug.Log($"<color=red>[AI]</color> GPU Fix: Risoluzione scalata al {Mathf.RoundToInt(risoluzioneAttuale * 100)}%");
+                }
+                else
+                {
+                    QualitySettings.shadowDistance = 0f;
+                    Debug.Log("<color=red>[AI]</color> Risoluzione minima raggiunta. Ombre disattivate.");
+                }
                 break;
             case 2: // MEMORY
+                nomeProblema = "Memory";
                 QualitySettings.masterTextureLimit = 2;
                 Resources.UnloadUnusedAssets();
                 System.GC.Collect();
                 Debug.Log("<color=magenta>[AI]</color> Memory Fix");
                 break;
             case 4: // PHYSICS
+                nomeProblema = "Physics";
                 Time.fixedDeltaTime = 0.06f; // Solo ~16 calcoli fisici al secondo (invece di 50)
                 Physics.defaultSolverIterations = 1; // Precisione collisioni minima
                 Debug.Log("<color=cyan>[AI]</color> Physics Fix");
                 break;
+        }
+
+        if (heatmapLogger != null)
+        {
+            heatmapLogger.RecordIssue(nomeProblema, ratio_FrameTime);
         }
     }
 
     void Ripristina()
     {
         // Se è già ai valori originali, non fa nulla
-        if(Application.targetFrameRate == originalFrameRate && QualitySettings.lodBias == originalLODBias &&
-            QualitySettings.shadowDistance == originalShadowDistance && QualitySettings.masterTextureLimit == originalTextureLimit) return;
+        if (Application.targetFrameRate == originalFrameRate &&
+            QualitySettings.lodBias == originalLODBias &&
+            QualitySettings.shadowDistance == originalShadowDistance &&
+            QualitySettings.masterTextureLimit == originalTextureLimit &&
+            risoluzioneAttuale >= 1.0f) return;
 
         cooldownAttuale = 2.0f; // Mette in pausa per 2 secondi per stabilizzare
 
@@ -263,6 +294,10 @@ public class AIAssistant : MonoBehaviour
 
         Time.fixedDeltaTime = 0.02f;
         Physics.defaultSolverIterations = 6;
+
+        // Ripristino Dynamic Resolution
+        risoluzioneAttuale = 1.0f;
+        ScalableBufferManager.ResizeBuffers(risoluzioneAttuale, risoluzioneAttuale);
 
         Debug.Log("<color=green>[AI]</color> Prestazioni tornate normali. Ripristino impostazioni.");
     }
