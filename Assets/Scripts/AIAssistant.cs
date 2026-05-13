@@ -255,14 +255,14 @@ public class AIAssistant : MonoBehaviour
                 }
                 break;
             case 2: // MEMORY
-                nomeProblema = "Memory";
+                nomeProblema = "MEMORY";
                 QualitySettings.masterTextureLimit = 2;
                 Resources.UnloadUnusedAssets();
                 System.GC.Collect();
                 Debug.Log("<color=magenta>[AI]</color> Memory Fix");
                 break;
             case 4: // PHYSICS
-                nomeProblema = "Physics";
+                nomeProblema = "PHYSICS";
                 Time.fixedDeltaTime = 0.06f; // Solo ~16 calcoli fisici al secondo (invece di 50)
                 Physics.defaultSolverIterations = 1; // Precisione collisioni minima
                 Debug.Log("<color=cyan>[AI]</color> Physics Fix");

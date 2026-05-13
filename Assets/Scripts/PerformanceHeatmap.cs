@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System.IO;
 using System.Text;
+using System.Globalization;
 
 public class PerformanceHeatmap : MonoBehaviour
 {
@@ -39,7 +40,7 @@ public class PerformanceHeatmap : MonoBehaviour
         string timestamp = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
         // Formatta la riga
-        string line = string.Format("{0},{1:F2},{2:F2},{3:F2},{4},{5:F2}\n",
+        string line = string.Format(CultureInfo.InvariantCulture, "{0},{1:F2},{2:F2},{3:F2},{4},{5:F2}\n",
             timestamp, pos.x, pos.y, pos.z, issueType, severity);
 
         File.AppendAllText(logPath, line);
