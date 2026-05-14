@@ -6,15 +6,12 @@ using System.Globalization;
 public class PerformanceHeatmap : MonoBehaviour
 {
     private string logPath;
-    private Transform cameraTransform;
+    private Transform targetTransform;
+    private bool playerTrack = false;
 
     void Awake()
     {
-        // Trova il Main Camera
-        if (Camera.main != null)
-        {
-            cameraTransform = Camera.main.transform;
-        }
+        AggiornaTarget();
 
         // Crea il percorso del file
         string rootPath = Directory.GetParent(Application.dataPath).FullName;
@@ -27,16 +24,37 @@ public class PerformanceHeatmap : MonoBehaviour
         }
     }
 
+    void AggiornaTarget()
+    {
+        // Cerca l'oggetto Player
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null)
+        {
+            targetTransform = player.transform;
+            playerTrack = true;
+            return;
+        }
+
+        // Se non c'è l'oggetto Player, usa la Main Camera
+        if (Camera.main != null)
+        {
+            targetTransform = Camera.main.transform;
+            playerTrack = false;
+        }
+    }
+
     // Funzione chiamata dall'AIAssistant
     public void RecordIssue(string issueType, float severity)
     {
-        // Se non trova la camera all'inizio, riprova qui nel caso la camera venga spawnata dopo
-        if (cameraTransform == null && Camera.main != null)
-            cameraTransform = Camera.main.transform;
+        // Se il target precedente è stato distrutto o non era ancora spawnato in Awake, riprova a cercarlo
+        if (targetTransform == null || !playerTrack)
+        {
+            AggiornaTarget();
+        }
 
-        if (cameraTransform == null) return;
+        if (targetTransform == null) return;
 
-        Vector3 pos = cameraTransform.position;
+        Vector3 pos = targetTransform.position;
         string timestamp = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
         // Formatta la riga

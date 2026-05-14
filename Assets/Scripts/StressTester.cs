@@ -7,6 +7,19 @@ public class StressTester : MonoBehaviour
     [Header("Riferimento")]
     public PerformanceLogger logger;
 
+    [Header("Parametri Test (Configurabili)")]
+    [Tooltip("Intensità del calcolo matematico per ogni livello CPU")]
+    public int cpuStepPower = 100000;
+
+    [Tooltip("Numero di sfere cariche di shader per ogni livello GPU")]
+    public int gpuStepObjects = 500;
+
+    [Tooltip("Numero di sfere fisiche con collisioni per ogni livello Fisica")]
+    public int physicsStepObjects = 200;
+
+    [Tooltip("Quanti MB di memoria allocare ad ogni frame per il test RAM")]
+    public int memoryStepMB = 10;
+
     [Header("Stato Stress Attuale")]
     public bool cpuStress = false;
     public int intensitaCpu = 0;
@@ -38,24 +51,24 @@ public class StressTester : MonoBehaviour
     void Update()
     {
         // CPU
-        if (Input.GetKeyDown(KeyCode.F1)) AttivaStressCPU(100000, "CPU_STRESS");
-        if (Input.GetKeyDown(KeyCode.F2)) AttivaStressCPU(1000000, "CPU_STRESS");
-        if (Input.GetKeyDown(KeyCode.F3)) AttivaStressCPU(5000000, "CPU_STRESS");
+        if (Input.GetKeyDown(KeyCode.F1)) AttivaStressCPU(cpuStepPower, "CPU_STRESS");
+        if (Input.GetKeyDown(KeyCode.F2)) AttivaStressCPU(cpuStepPower * 10, "CPU_STRESS");
+        if (Input.GetKeyDown(KeyCode.F3)) AttivaStressCPU(cpuStepPower * 50, "CPU_STRESS");
 
         // GPU
-        if (Input.GetKeyDown(KeyCode.F4)) AttivaStressGPU(500, "GPU_STRESS");
-        if (Input.GetKeyDown(KeyCode.F5)) AttivaStressGPU(3000, "GPU_STRESS");
-        if (Input.GetKeyDown(KeyCode.F6)) AttivaStressGPU(15000, "GPU_STRESS");
+        if (Input.GetKeyDown(KeyCode.F4)) AttivaStressGPU(gpuStepObjects, "GPU_STRESS");
+        if (Input.GetKeyDown(KeyCode.F5)) AttivaStressGPU(gpuStepObjects * 6, "GPU_STRESS");
+        if (Input.GetKeyDown(KeyCode.F6)) AttivaStressGPU(gpuStepObjects * 30, "GPU_STRESS");
 
         // Fisica
-        if (Input.GetKeyDown(KeyCode.F7)) AttivaStressFisica(200, "PHYSICS_STRESS");
-        if (Input.GetKeyDown(KeyCode.F8)) AttivaStressFisica(800, "PHYSICS_STRESS");
+        if (Input.GetKeyDown(KeyCode.F7)) AttivaStressFisica(physicsStepObjects, "PHYSICS_STRESS");
+        if (Input.GetKeyDown(KeyCode.F8)) AttivaStressFisica(physicsStepObjects * 4, "PHYSICS_STRESS");
 
         // Memoria (Garbage Collector Stutter)
-        if (Input.GetKeyDown(KeyCode.F9)) AttivaStressMemoria(10, "MEMORY_STRESS"); // Alloca 10MB al frame
+        if (Input.GetKeyDown(KeyCode.F9)) AttivaStressMemoria(memoryStepMB, "MEMORY_STRESS"); // Alloca 10MB al frame
 
         // Reset
-        if (Input.GetKeyDown(KeyCode.Space)) FermaTutto();
+        if (Input.GetKeyDown(KeyCode.Escape)) FermaTutto();
 
         if (cpuStress)
         {
