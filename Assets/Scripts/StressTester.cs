@@ -20,6 +20,16 @@ public class StressTester : MonoBehaviour
     [Tooltip("Quanti MB di memoria allocare ad ogni frame per il test RAM")]
     public int memoryStepMB = 10;
 
+    [Header("Modalità Autopilota")]
+    [Tooltip("Attiva l'esecuzione automatica e casuale degli stress test.")]
+    public bool usaAutopilota = false;
+
+    [Tooltip("Ogni quanti secondi l'Autopilota scatena uno stress test casuale.")]
+    public float intervalloEventi = 20f;
+
+    [Tooltip("Quanto dura lo stress test prima che l'Autopilota lo termini.")]
+    public float durataEvento = 7f;
+
     [Header("Stato Stress Attuale")]
     public bool cpuStress = false;
     public int intensitaCpu = 0;
@@ -34,6 +44,8 @@ public class StressTester : MonoBehaviour
 
     public bool memoryStress = false;
     public int mbAllocataFrame = 0;
+
+    private Coroutine routineAutopilota;
 
     IEnumerator Start()
     {
@@ -50,6 +62,8 @@ public class StressTester : MonoBehaviour
 
     void Update()
     {
+        GestisciCicloAutopilota();
+
         // CPU
         if (Input.GetKeyDown(KeyCode.F1)) AttivaStressCPU(cpuStepPower, "CPU_STRESS");
         if (Input.GetKeyDown(KeyCode.F2)) AttivaStressCPU(cpuStepPower * 10, "CPU_STRESS");
@@ -80,6 +94,60 @@ public class StressTester : MonoBehaviour
         {
             // Alloca array enormi ogni frame per forzare il Garbage Collector
             byte[] spazzatura = new byte[1024 * 1024 * mbAllocataFrame];
+        }
+    }
+
+    void GestisciCicloAutopilota()
+    {
+        if (usaAutopilota && routineAutopilota == null)
+        {
+            routineAutopilota = StartCoroutine(LoopAutopilota());
+        }
+        else if (!usaAutopilota && routineAutopilota != null)
+        {
+            StopCoroutine(routineAutopilota);
+            routineAutopilota = null;
+            FermaTutto();
+            Debug.Log("Autopilota Disattivato.");
+        }
+    }
+
+    IEnumerator LoopAutopilota()
+    {
+        Debug.Log("Autopilota Attivo.");
+
+        while (usaAutopilota)
+        {
+            // Attende il tempo prestabilito tra un attacco e l'altro
+            yield return new WaitForSeconds(intervalloEventi);
+
+            if (!usaAutopilota) break;
+
+            // Sceglie un'emergenza a caso tra 9 combinazioni possibili
+            int tipoStressCasuale = Random.Range(0, 9);
+
+            switch (tipoStressCasuale)
+            {
+                case 0: AttivaStressCPU(cpuStepPower, "CPU_STRESS"); break;
+                case 1: AttivaStressCPU(cpuStepPower * 10, "CPU_STRESS"); break;
+                case 2: AttivaStressCPU(cpuStepPower * 50, "CPU_STRESS"); break;
+
+                case 3: AttivaStressGPU(gpuStepObjects, "GPU_STRESS"); break;
+                case 4: AttivaStressGPU(gpuStepObjects * 6, "GPU_STRESS"); break;
+                case 5: AttivaStressGPU(gpuStepObjects * 30, "GPU_STRESS"); break;
+
+                case 6: AttivaStressFisica(physicsStepObjects, "PHYSICS_STRESS"); break;
+                case 7: AttivaStressFisica(physicsStepObjects * 4, "PHYSICS_STRESS"); break;
+
+                case 8: AttivaStressMemoria(memoryStepMB, "MEMORY_STRESS"); break;
+            }
+
+            // Lascia agire il lag/stress per i secondi prestabiliti
+            yield return new WaitForSeconds(durataEvento);
+
+            // Ferma l'evento e dà tempo al gioco (e all'IA) di recuperare prima del prossimo round
+            FermaTutto();
+            Debug.Log("Autopilota: Evento terminato. Fase di tregua...");
         }
     }
 
