@@ -7,8 +7,6 @@ using UnityEngine.Profiling;
 
 public class AIAssistant : MonoBehaviour
 {
-    public TextMeshProUGUI testoAssistente;
-
     public enum TipoIA { Random_Forest_Precisa, Decision_Tree_Veloce }
 
     [Header("Configurazione")]
@@ -49,6 +47,14 @@ public class AIAssistant : MonoBehaviour
     public float ratio_CPU;
     public float ratio_Memory;
 
+    [HideInInspector] public string statoAttuale = "Performance Ok";
+    public float OttieniRisoluzioneAttuale => risoluzioneAttuale;
+
+    [Header("Metriche Grezze per la UI")]
+    [HideInInspector] public float rawFPS;
+    [HideInInspector] public float rawRAM_MB;
+    private float smoothedDeltaTime = 0.0f;
+
     private float baselineFT = 0f;
     private float baselineBatches = 0f;
     private float baselineCPU = 0f;
@@ -77,12 +83,12 @@ public class AIAssistant : MonoBehaviour
 
     IEnumerator Start()
     {
-        MostraMessaggio("AI: Riscaldamento...", Color.yellow);
+        statoAttuale = "AI: Riscaldamento";
 
         // Aspetta che Unity superi il lag iniziale
         yield return new WaitForSeconds(2f);
 
-        MostraMessaggio("AI: Calibrazione hardware in corso...", Color.white);
+        statoAttuale = "AI: Calibrazione hardware in corso";
 
         float sommaFT = 0;
         float sommaBatches = 0;
@@ -112,11 +118,15 @@ public class AIAssistant : MonoBehaviour
         if (baselineCPU <= 0) baselineCPU = 1;
 
         calibrato = true;
-        MostraMessaggio("AI: Sistema Pronto.", Color.green);
+        statoAttuale = "AI: Sistema Pronto";
     }
 
     void Update()
     {
+        smoothedDeltaTime += (Time.unscaledDeltaTime - smoothedDeltaTime) * 0.1f;
+        rawFPS = smoothedDeltaTime > 0 ? 1.0f / smoothedDeltaTime : 0f;
+        rawRAM_MB = System.GC.GetTotalMemory(false) / 1048576f;
+
         if (!calibrato) return;
 
         if (cooldownAttuale > 0) cooldownAttuale -= Time.unscaledDeltaTime;
@@ -197,11 +207,16 @@ public class AIAssistant : MonoBehaviour
         // Ordine alfabetico Scikit-Learn: 0:CPU, 1:GPU, 2:MEMORY, 3:NORMAL, 4:PHYSICS
         switch (indice)
         {
-            case 0: MostraMessaggio(prefisso + "Stress CPU!", new Color(1f, 0.5f, 0f)); break;
-            case 1: MostraMessaggio(prefisso + "Stress GPU!", Color.red); break;
-            case 2: MostraMessaggio(prefisso + "Memory Leak!", Color.magenta); break;
-            case 3: MostraMessaggio(prefisso + "Performance OK", Color.green); break;
-            case 4: MostraMessaggio(prefisso + "Stress Fisica!", Color.cyan); break;
+            case 0: 
+                statoAttuale = "Stress CPU"; break;
+            case 1: 
+                statoAttuale = "Stress GPU"; break;
+            case 2: 
+                statoAttuale = "Memory Leak"; break;
+            case 3: 
+                statoAttuale = "Performance OK"; break;
+            case 4: 
+                statoAttuale = "Stress Fisica"; break;
         }
 
         if (!correzioneAutomatica) return;
@@ -300,14 +315,5 @@ public class AIAssistant : MonoBehaviour
         ScalableBufferManager.ResizeBuffers(risoluzioneAttuale, risoluzioneAttuale);
 
         Debug.Log("<color=green>[AI]</color> Prestazioni tornate normali. Ripristino impostazioni.");
-    }
-
-    void MostraMessaggio(string messaggio, Color colore)
-    {
-        if (testoAssistente != null)
-        {
-            testoAssistente.text = messaggio;
-            testoAssistente.color = colore;
-        }
     }
 }
