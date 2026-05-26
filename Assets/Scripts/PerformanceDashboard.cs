@@ -45,14 +45,14 @@ public class PerformanceDashboard : MonoBehaviour
                             $"Risoluzione DRS: {risoluzioneScalata}";
 
         // Colora il testo dello stato in base alla gravità
-        if (aiAssistant.statoAttuale == "Performance Ok") testoStatoIA.color = Color.green;
+        if (aiAssistant.statoAttuale == "Performance OK") testoStatoIA.color = Color.green;
         else if (aiAssistant.statoAttuale == "Stress CPU") testoStatoIA.color = new Color(1f, 0.5f, 0f);
         else if (aiAssistant.statoAttuale == "Stress GPU") testoStatoIA.color = Color.red;
         else if (aiAssistant.statoAttuale == "Stress Fisica") testoStatoIA.color = Color.cyan;
         else if (aiAssistant.statoAttuale == "Memory Leak") testoStatoIA.color = Color.magenta;
-        else if (aiAssistant.statoAttuale == "AI: Riscaldamento") testoStatoIA.color = Color.yellow;
-        else if (aiAssistant.statoAttuale == "AI: Calibrazione hardware in corso") testoStatoIA.color = Color.white;
-        else if (aiAssistant.statoAttuale == "AI: Sistema Pronto") testoStatoIA.color = Color.green;
+        else if (aiAssistant.statoAttuale == "Riscaldamento") testoStatoIA.color = Color.yellow;
+        else if (aiAssistant.statoAttuale == "Calibrazione in corso") testoStatoIA.color = Color.white;
+        else if (aiAssistant.statoAttuale == "Sistema Pronto") testoStatoIA.color = Color.green;
 
         // Mostra i ratio di telemetria
         testoRatiosTelemetria.text = string.Format(

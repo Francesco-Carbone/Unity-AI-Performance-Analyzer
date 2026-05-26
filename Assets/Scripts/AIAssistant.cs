@@ -60,7 +60,12 @@ public class AIAssistant : MonoBehaviour
     private float baselineCPU = 0f;
     private float baselineMemory = 0f;
 
+    [Header("Tasti Debug")]
+    [Tooltip("Tasto per forzare la ricalibrazione dei dati di riferimento in tempo reale")]
+    public KeyCode tastoRicalibrazione = KeyCode.C;
+
     private bool calibrato = false;
+    private bool inCalibrazione = false;
     private float timerAnalisi = 0f;
 
     private Recorder cpuRecorder;
@@ -73,7 +78,7 @@ public class AIAssistant : MonoBehaviour
         originalShadowDistance = QualitySettings.shadowDistance;
         originalTextureLimit = QualitySettings.masterTextureLimit;
 
-    Sampler sampler = Sampler.Get("PlayerLoop");
+        Sampler sampler = Sampler.Get("PlayerLoop");
         if (sampler != null)
         {
             cpuRecorder = sampler.GetRecorder();
@@ -83,42 +88,13 @@ public class AIAssistant : MonoBehaviour
 
     IEnumerator Start()
     {
-        statoAttuale = "AI: Riscaldamento";
+        statoAttuale = "Riscaldamento";
 
         // Aspetta che Unity superi il lag iniziale
         yield return new WaitForSeconds(2f);
 
-        statoAttuale = "AI: Calibrazione hardware in corso";
-
-        float sommaFT = 0;
-        float sommaBatches = 0;
-        float sommaCPU = 0;
-        float sommaMemory = 0;
-        int campioni = 0;
-        float t = 0;
-
-        // Fase di calibrazione: 4 secondi per mappare le prestazioni standard del PC locale
-        while (t < 4f)
-        { 
-            sommaFT += Time.unscaledDeltaTime * 1000f;
-            sommaBatches += UnityEditor.UnityStats.batches;
-            sommaCPU += GetCPUTime();
-            sommaMemory += System.GC.GetTotalMemory(false) / 1048576f;
-            campioni++;
-            t += Time.unscaledDeltaTime;
-            yield return null;
-        }
-
-        baselineFT = sommaFT / campioni;
-        baselineBatches = sommaBatches / campioni;
-        baselineCPU = sommaCPU / campioni;
-        baselineMemory = sommaMemory / campioni;
-
-        if (baselineBatches <= 0) baselineBatches = 1;
-        if (baselineCPU <= 0) baselineCPU = 1;
-
-        calibrato = true;
-        statoAttuale = "AI: Sistema Pronto";
+        // Avvia la prima calibrazione automatica
+        StartCoroutine(RoutineCalibrazione(4f));
     }
 
     void Update()
@@ -127,7 +103,14 @@ public class AIAssistant : MonoBehaviour
         rawFPS = smoothedDeltaTime > 0 ? 1.0f / smoothedDeltaTime : 0f;
         rawRAM_MB = System.GC.GetTotalMemory(false) / 1048576f;
 
-        if (!calibrato) return;
+        // Ricalibrazione manuale
+        if (Input.GetKeyDown(tastoRicalibrazione) && !inCalibrazione)
+        {
+            StartCoroutine(RoutineCalibrazione(4f));
+        }
+
+        // Se l'IA non è calibrata o sta calibrando ora, blocca le analisi successive
+        if (!calibrato || inCalibrazione) return;
 
         if (cooldownAttuale > 0) cooldownAttuale -= Time.unscaledDeltaTime;
 
@@ -137,6 +120,71 @@ public class AIAssistant : MonoBehaviour
             EseguiDiagnosiIA();
             timerAnalisi = 0f;
         }
+    }
+
+    // Coroutine riutilizzabile per stabilire o ripristinare i valori di riferimento ("Baseline")
+    IEnumerator RoutineCalibrazione(float durata)
+    {
+        inCalibrazione = true;
+        calibrato = false;
+
+        statoAttuale = "Calibrazione in corso";
+        Debug.Log("<color=yellow>[AI]</color> Ricalibrazione sistema in corso... Muovi la visuale!");
+
+        // Ripristina la grafica allo stato originale prima di raccogliere i dati
+        RipristinaSenzaCooldown();
+
+        float sommaFT = 0;
+        float sommaBatches = 0;
+        float sommaCPU = 0;
+        float sommaMemory = 0;
+        int campioni = 0;
+        float t = 0;
+
+        while (t < durata)
+        {
+            sommaFT += Time.unscaledDeltaTime * 1000f;
+            sommaBatches += UnityEditor.UnityStats.batches;
+            sommaCPU += GetCPUTime();
+            sommaMemory += System.GC.GetTotalMemory(false) / 1048576f;
+
+            campioni++;
+            t += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        if (campioni > 0)
+        {
+            baselineFT = sommaFT / campioni;
+            baselineBatches = sommaBatches / campioni;
+            baselineCPU = sommaCPU / campioni;
+            baselineMemory = sommaMemory / campioni;
+
+            if (baselineBatches <= 0) baselineBatches = 1;
+            if (baselineCPU <= 0) baselineCPU = 1;
+        }
+
+        calibrato = true;
+        inCalibrazione = false;
+        statoAttuale = "Sistema Pronto";
+
+        Debug.Log($"<color=green>[AI]</color> Nuova Baseline salvata! FPS: {1000f / baselineFT:F0}, Batches: {baselineBatches:F0}, RAM: {baselineMemory:F0}MB");
+    }
+
+    // Metodo di utilità per resettare i filtri senza far scattare il timer di pausa
+    void RipristinaSenzaCooldown()
+    {
+        Application.targetFrameRate = originalFrameRate;
+        QualitySettings.shadowDistance = originalShadowDistance;
+        QualitySettings.lodBias = originalLODBias;
+        QualitySettings.masterTextureLimit = originalTextureLimit;
+        QualitySettings.maximumLODLevel = 0;
+
+        Time.fixedDeltaTime = 0.02f;
+        Physics.defaultSolverIterations = 6;
+
+        risoluzioneAttuale = 1.0f;
+        ScalableBufferManager.ResizeBuffers(1f, 1f);
     }
 
     float GetCPUTime()
