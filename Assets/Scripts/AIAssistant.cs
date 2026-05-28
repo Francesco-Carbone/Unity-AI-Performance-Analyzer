@@ -276,7 +276,7 @@ public class AIAssistant : MonoBehaviour
             // Ripristina se è stato normale per 15 cicli (7.5 secondi) e il cooldown è finito
             if (contatoreNormal >= tempoPerRipristino && cooldownAttuale <= 0)
             {
-                Ripristina();
+                RipristinaGraduale();
                 contatoreNormal = 0;
             }
         }
@@ -338,7 +338,7 @@ public class AIAssistant : MonoBehaviour
         }
     }
 
-    void Ripristina()
+    void RipristinaGraduale()
     {
         // Se è già ai valori originali, non fa nulla
         if (Application.targetFrameRate == originalFrameRate &&
@@ -347,7 +347,57 @@ public class AIAssistant : MonoBehaviour
             QualitySettings.masterTextureLimit == originalTextureLimit &&
             risoluzioneAttuale >= 1.0f) return;
 
-        cooldownAttuale = 2.0f; // Mette in pausa per 2 secondi per stabilizzare
+        cooldownAttuale = 1.5f; // Mette in pausa per 1.5 secondi per far stabilizzare il frame dopo l'aumento
+
+        // Risoluzione
+        if (risoluzioneAttuale < 1.0f)
+        {
+            risoluzioneAttuale = Mathf.Min(1.0f, risoluzioneAttuale + stepRisoluzione);
+            ScalableBufferManager.ResizeBuffers(risoluzioneAttuale, risoluzioneAttuale);
+            Debug.Log($"<color=green>[AI]</color> Ripristino Graduale: Risoluzione al {Mathf.RoundToInt(risoluzioneAttuale * 100)}%");
+            return; // Esce dalla funzione. Ripristinerà il resto al prossimo giro
+        }
+
+        // Ombra
+        if (QualitySettings.shadowDistance < originalShadowDistance)
+        {
+            QualitySettings.shadowDistance = originalShadowDistance;
+            Debug.Log("<color=green>[AI]</color> Ripristino Graduale: Ombre riattivate.");
+            return;
+        }
+
+        // LOD Bias
+        if (QualitySettings.lodBias < originalLODBias || QualitySettings.maximumLODLevel > 0)
+        {
+            // Aumenta a piccoli passi di 0.3
+            QualitySettings.lodBias = Mathf.Min(originalLODBias, QualitySettings.lodBias + 0.3f);
+
+            // Se ha raggiunto o superato il valore originale, ripristina anche il livello massimo
+            if (QualitySettings.lodBias >= originalLODBias)
+            {
+                QualitySettings.maximumLODLevel = 0;
+            }
+            Debug.Log($"<color=green>[AI]</color> Ripristino Graduale: LOD Bias a {QualitySettings.lodBias:F2}");
+            return;
+        }
+
+        // Fisica
+        if (Time.fixedDeltaTime > 0.02f)
+        {
+            Time.fixedDeltaTime = 0.02f;
+            Physics.defaultSolverIterations = 6;
+            Debug.Log("<color=green>[AI]</color> Ripristino Graduale: Calcoli fisici normalizzati.");
+            return;
+        }
+
+        // Texture e framerate
+        if (QualitySettings.masterTextureLimit != originalTextureLimit || Application.targetFrameRate != originalFrameRate)
+        {
+            QualitySettings.masterTextureLimit = originalTextureLimit;
+            Application.targetFrameRate = originalFrameRate;
+            Debug.Log("<color=green>[AI]</color> Ripristino Graduale: Qualità Texture normalizzata. Sistema 100% stabile.");
+            return;
+        }
 
         Application.targetFrameRate = originalFrameRate;
         QualitySettings.shadowDistance = originalShadowDistance;
