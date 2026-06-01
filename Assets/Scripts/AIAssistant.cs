@@ -53,6 +53,7 @@ public class AIAssistant : MonoBehaviour
     [Header("Metriche Grezze per la UI")]
     [HideInInspector] public float rawFPS;
     [HideInInspector] public float rawRAM_MB;
+    [HideInInspector] public float rawVRAM_MB;
     private float smoothedDeltaTime = 0.0f;
 
     private float baselineFT = 0f;
@@ -62,7 +63,7 @@ public class AIAssistant : MonoBehaviour
 
     [Header("Tasti Debug")]
     [Tooltip("Tasto per forzare la ricalibrazione dei dati di riferimento in tempo reale")]
-    public KeyCode tastoRicalibrazione = KeyCode.C;
+    public KeyCode ricalibrazione = KeyCode.C;
 
     private bool calibrato = false;
     private bool inCalibrazione = false;
@@ -102,9 +103,10 @@ public class AIAssistant : MonoBehaviour
         smoothedDeltaTime += (Time.unscaledDeltaTime - smoothedDeltaTime) * 0.1f;
         rawFPS = smoothedDeltaTime > 0 ? 1.0f / smoothedDeltaTime : 0f;
         rawRAM_MB = System.GC.GetTotalMemory(false) / 1048576f;
+        rawVRAM_MB = Profiler.GetAllocatedMemoryForGraphicsDriver() / 1048576f;
 
         // Ricalibrazione manuale
-        if (Input.GetKeyDown(tastoRicalibrazione) && !inCalibrazione)
+        if (Input.GetKeyDown(ricalibrazione) && !inCalibrazione)
         {
             StartCoroutine(RoutineCalibrazione(4f));
         }
@@ -146,7 +148,7 @@ public class AIAssistant : MonoBehaviour
             sommaFT += Time.unscaledDeltaTime * 1000f;
             sommaBatches += UnityEditor.UnityStats.batches;
             sommaCPU += GetCPUTime();
-            sommaMemory += System.GC.GetTotalMemory(false) / 1048576f;
+            sommaMemory += (System.GC.GetTotalMemory(false) + Profiler.GetAllocatedMemoryForGraphicsDriver()) / 1048576f;
 
             campioni++;
             t += Time.unscaledDeltaTime;
@@ -200,11 +202,12 @@ public class AIAssistant : MonoBehaviour
     void EseguiDiagnosiIA()
     {
         float currentCPU = GetCPUTime();
+        float currentMem = (System.GC.GetTotalMemory(false) + Profiler.GetAllocatedMemoryForGraphicsDriver()) / 1048576f;
 
         double ratioFT = (Time.unscaledDeltaTime * 1000f) / baselineFT;
         double ratioBT = (double)UnityEditor.UnityStats.batches / baselineBatches;
         double ratioCPU = currentCPU / baselineCPU;
-        double ratioMem = (System.GC.GetTotalMemory(false) / 1048576f) / baselineMemory;
+        double ratioMem = currentMem / baselineMemory;
 
         // Aggiorna info nell'Inspector
         ratio_FrameTime = (float)ratioFT;

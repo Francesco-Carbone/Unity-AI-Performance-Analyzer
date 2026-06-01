@@ -76,7 +76,9 @@ public class PerformanceLogger : MonoBehaviour
         batches = UnityEditor.UnityStats.batches;
 #endif
 
-        float memoryMB = System.GC.GetTotalMemory(false) / 1048576f;
+        float ramMB = System.GC.GetTotalMemory(false) / 1048576f;
+        float vramMB = Profiler.GetAllocatedMemoryForGraphicsDriver() / 1048576f;
+        float memoryMB = ramMB + vramMB;
 
         string riga = string.Format(System.Globalization.CultureInfo.InvariantCulture,
             "{0},{1:F2},{2:F2},{3:F0},{4},{5:F2},{6:F2}\n", 

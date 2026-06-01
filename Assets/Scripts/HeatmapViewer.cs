@@ -21,6 +21,12 @@ public class HeatmapViewer : MonoBehaviour
     [Tooltip("Mostra solo i problemi con un ratio di stress superiore a questo valore (es. 1.5)")]
     public float gravitaMinima = 0f;
 
+    [Header("Visualizzazione In-Game")]
+    [Tooltip("Tasto per accendere/spegnere gli ologrammi della heatmap durante il gioco")]
+    public KeyCode toggleInGame = KeyCode.M;
+    private bool inGameAttiva = false;
+    private GameObject contenitoreInGame; // Raggruppa tutte le sfere
+
     private struct DatiPunto
     {
         public Vector3 posizione;
@@ -29,6 +35,23 @@ public class HeatmapViewer : MonoBehaviour
     }
 
     private List<DatiPunto> puntiDaDisegnare = new List<DatiPunto>();
+
+    void Update()
+    {
+        if (Input.GetKeyDown(toggleInGame))
+        {
+            inGameAttiva = !inGameAttiva;
+
+            if (inGameAttiva)
+            {
+                MostraHeatmapInGame();
+            }
+            else
+            {
+                NascondiHeatmapInGame();
+            }
+        }
+    }
 
     [ContextMenu("Carica Dati Heatmap")]
     public void CaricaDati()
@@ -68,6 +91,73 @@ public class HeatmapViewer : MonoBehaviour
             }
         }
         Debug.Log($"Heatmap caricata: {puntiDaDisegnare.Count} punti rilevati.");
+    }
+
+    public void MostraHeatmapInGame()
+    {
+        NascondiHeatmapInGame(); // Pulisce la scena
+        CaricaDati();
+
+        if (puntiDaDisegnare.Count == 0) return;
+
+        // Crea una cartella vuota nella scena per raggruppare i punti
+        contenitoreInGame = new GameObject("Heatmap_InGame_Container");
+
+        // Crea un materiale base (Trasparente e senza ombre)
+        Material matBase = new Material(Shader.Find("Standard"));
+        matBase.SetFloat("_Mode", 3); // Imposta il render mode su Transparent
+        matBase.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        matBase.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        matBase.SetInt("_ZWrite", 0);
+        matBase.DisableKeyword("_ALPHATEST_ON");
+        matBase.EnableKeyword("_ALPHABLEND_ON");
+        matBase.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+        matBase.renderQueue = 3000;
+
+        foreach (var punto in puntiDaDisegnare)
+        {
+            if (punto.gravita < gravitaMinima) continue;
+
+            Color colorePunto = Color.white;
+            if (punto.tipoProblema.Contains("GPU")) { if (!mostraGPU) continue; colorePunto = Color.red; }
+            else if (punto.tipoProblema.Contains("CPU")) { if (!mostraCPU) continue; colorePunto = new Color(1f, 0.5f, 0f); }
+            else if (punto.tipoProblema.Contains("PHYSICS")) { if (!mostraFisica) continue; colorePunto = Color.cyan; }
+            else if (punto.tipoProblema.Contains("MEMORY")) { if (!mostraMemoria) continue; colorePunto = Color.magenta; }
+            else { if (!mostraSconosciuti) continue; colorePunto = Color.yellow; }
+
+            // Rende il colore semi-trasparente (Alpha al 60%)
+            colorePunto.a = 0.6f;
+
+            // Spawna la sfera
+            GameObject sfera = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            sfera.transform.SetParent(contenitoreInGame.transform);
+            sfera.transform.position = punto.posizione;
+
+            sfera.transform.localScale = Vector3.one * (raggioSfera * 2f);
+
+            // Distrugge il collider
+            Destroy(sfera.GetComponent<Collider>());
+
+            // Disattiva le ombre sulla singola sfera
+            MeshRenderer renderer = sfera.GetComponent<MeshRenderer>();
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+
+            Material matSfera = new Material(matBase);
+            matSfera.color = colorePunto;
+            renderer.material = matSfera;
+        }
+
+        Debug.Log("<color=cyan>[Heatmap]</color> Visualizzatore In-Game ATTIVATO.");
+    }
+
+    public void NascondiHeatmapInGame()
+    {
+        if (contenitoreInGame != null)
+        {
+            Destroy(contenitoreInGame);
+            Debug.Log("<color=cyan>[Heatmap]</color> Visualizzatore In-Game DISATTIVATO.");
+        }
     }
 
     private void OnDrawGizmos()

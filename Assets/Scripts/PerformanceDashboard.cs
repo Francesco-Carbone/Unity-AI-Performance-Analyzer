@@ -35,7 +35,9 @@ public class PerformanceDashboard : MonoBehaviour
         else if (fps >= 30) testoFPS.color = Color.yellow;
         else testoFPS.color = Color.red;
 
-        testoRAM.text = string.Format("RAM Dinamica: {0:0.} MB", aiAssistant.rawRAM_MB);
+        testoRAM.text = string.Format("RAM (Script): {0:0.} MB\nVRAM (GPU): {1:0.} MB",
+                                   aiAssistant.rawRAM_MB,
+                                   aiAssistant.rawVRAM_MB);
 
         string modello = aiAssistant.modelloDaUsare == AIAssistant.TipoIA.Random_Forest_Precisa ? "Random Forest" : "Decision Tree";
         string risoluzioneScalata = string.Format("{0:0}%", aiAssistant.OttieniRisoluzioneAttuale * 100f);
