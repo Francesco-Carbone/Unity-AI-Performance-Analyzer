@@ -8,21 +8,29 @@ public class LagHunterAgent : Agent
     [Header("Connessioni Sistemi")]
     public AIAssistant aiAssistant;
     private CharacterController characterController;
+    private PlayerCharacterController playerCharacterController;
 
     [Header("Parametri Movimento Bot")]
     public float velocitaMovimento = 8f;
     public float velocitaRotazione = 150f;
 
+    [Header("Limiti Episodio")]
+    [Tooltip("Numero massimo di passi prima che il round si resetti (es. 3000 passi = circa 1 minuto)")]
+    public int passiMassimiPerEpisodio = 7000;
+
     private Vector3 posizioneIniziale;
 
     // Sistema Anti-Incastro e Esplorazione
     private HashSet<Vector3Int> celleVisitate = new HashSet<Vector3Int>();
-    private float dimensioneCellaGriglia = 3f; // Blocchi di 3x3 metri
+    private float dimensioneCellaGriglia = 1.5f; // Blocchi di 3x3 metri
 
     public override void Initialize()
     {
         characterController = GetComponent<CharacterController>();
+        playerCharacterController = GetComponent<PlayerCharacterController>();
         posizioneIniziale = transform.position;
+
+        MaxStep = passiMassimiPerEpisodio;
 
         if (aiAssistant == null)
         {
@@ -33,6 +41,12 @@ public class LagHunterAgent : Agent
     // Viene chiamato all'inizio di ogni "round" di addestramento (Reset)
     public override void OnEpisodeBegin()
     {
+        // Resetta lo stato di vita e cura il giocatore prima di muoverlo
+        if (playerCharacterController != null)
+        {
+            playerCharacterController.ResuscitaECura();
+        }
+
         // Resetta il bot alla posizione iniziale
         characterController.enabled = false;
         transform.position = posizioneIniziale;
@@ -56,6 +70,14 @@ public class LagHunterAgent : Agent
     // Cosa fa l'IA e come viene ricompensata
     public override void OnActionReceived(float[] vectorAction)
     {
+        // Controllo morte
+        if (playerCharacterController != null && playerCharacterController.isDead)
+        {
+            AddReward(-3.0f);
+            EndEpisode();     // Termina il round immediatamente
+            return;
+        }
+
         // Riceve i comandi continui da Python (valori da -1 a +1)
         float inputMovimentoAvanti = vectorAction[0]; // Avanti / Indietro
         float inputRotazione = vectorAction[1];       // Ruota la visuale
@@ -87,11 +109,11 @@ public class LagHunterAgent : Agent
         if (!celleVisitate.Contains(cellaAttuale))
         {
             celleVisitate.Add(cellaAttuale);
-            AddReward(0.5f);
+            AddReward(2.0f);
         }
 
         // Punizione temporale evita che l'IA rimanga ferma a fare nulla
-        AddReward(-0.001f);
+        AddReward(-0.005f);
 
         if (transform.position.y < -20f)
         {
