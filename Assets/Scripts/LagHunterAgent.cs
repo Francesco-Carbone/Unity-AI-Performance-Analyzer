@@ -57,6 +57,25 @@ public class LagHunterAgent : Agent
         celleVisitate.Clear();
     }
 
+    void FixedUpdate()
+    {
+        // Controllo morte
+        if (playerCharacterController != null && playerCharacterController.isDead)
+        {
+            AddReward(-3.0f);
+            EndEpisode(); // Forza il reset immediato dell'episodio
+            return;
+        }
+
+        // Controllo caduta fuori dalla mappa
+        if (transform.position.y < -20f)
+        {
+            AddReward(-2.0f);
+            EndEpisode(); // Forza il reset immediato
+            return;
+        }
+    }
+
     public override void CollectObservations(VectorSensor sensor)
     {
         // La velocità attuale del bot nello spazio
@@ -70,11 +89,8 @@ public class LagHunterAgent : Agent
     // Cosa fa l'IA e come viene ricompensata
     public override void OnActionReceived(float[] vectorAction)
     {
-        // Controllo morte
         if (playerCharacterController != null && playerCharacterController.isDead)
         {
-            AddReward(-3.0f);
-            EndEpisode();     // Termina il round immediatamente
             return;
         }
 
@@ -114,13 +130,6 @@ public class LagHunterAgent : Agent
 
         // Punizione temporale evita che l'IA rimanga ferma a fare nulla
         AddReward(-0.005f);
-
-        if (transform.position.y < -20f)
-        {
-            AddReward(-2.0f);
-            EndEpisode();
-            return;
-        }
     }
 
     // Permette di guidare il bot manualmente con le frecce della tastiera per test
