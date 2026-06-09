@@ -18,7 +18,7 @@ public class StressTester : MonoBehaviour
     public int physicsStepObjects = 200;
 
     [Tooltip("Quanti MB di memoria allocare ad ogni frame per il test RAM")]
-    public int memoryStepMB = 10;
+    public int memoryStepMB = 40;
 
     [Header("Modalità Autopilota")]
     [Tooltip("Attiva l'esecuzione automatica e casuale degli stress test.")]
