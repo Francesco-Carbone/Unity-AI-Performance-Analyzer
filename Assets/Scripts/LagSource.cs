@@ -21,7 +21,7 @@ public class LagSource : MonoBehaviour
         // Se non ha assegnato l'agente nell'inspector, lo cerca automaticamente
         if (agente == null)
         {
-            LagHunterAgent agentScript = FindObjectOfType<LagHunterAgent>();
+            LagHunterAgent agentScript = Object.FindAnyObjectByType<LagHunterAgent>();
             if (agentScript != null)
             {
                 agente = agentScript.transform;

@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System.IO;
 using UnityEngine.Profiling;
+using Unity.Profiling;
 
 public class PerformanceLogger : MonoBehaviour
 {
@@ -12,6 +13,7 @@ public class PerformanceLogger : MonoBehaviour
     [HideInInspector] public string scenarioLabel = "CALIBRATION";
 
     private Recorder cpuRecorder;
+    private ProfilerRecorder batchesRecorder;
 
     void Awake()
     {
@@ -29,6 +31,8 @@ public class PerformanceLogger : MonoBehaviour
             cpuRecorder.enabled = true;
         }
 
+        batchesRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Batches Count");
+
         // Crea il file di log
         try
         {
@@ -45,6 +49,12 @@ public class PerformanceLogger : MonoBehaviour
         }
     }
 
+    void OnDestroy()
+    {
+        if (batchesRecorder.Valid)
+            batchesRecorder.Dispose();
+    }
+
     void Update()
     {
         timer += Time.unscaledDeltaTime;
@@ -53,6 +63,15 @@ public class PerformanceLogger : MonoBehaviour
             LogData();
             timer = 0f;
         }
+    }
+
+    float GetBatchesCount()
+    {
+        if (batchesRecorder.Valid)
+        {
+            return batchesRecorder.LastValue;
+        }
+        return 100f; // Valore di fallback generico se il profiler non è ancora pronto
     }
 
     void LogData()
@@ -73,7 +92,7 @@ public class PerformanceLogger : MonoBehaviour
 
         int batches = 0;
 #if UNITY_EDITOR
-        batches = UnityEditor.UnityStats.batches;
+        batches = (int)GetBatchesCount();
 #endif
 
         float ramMB = System.GC.GetTotalMemory(false) / 1048576f;

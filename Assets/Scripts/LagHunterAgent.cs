@@ -1,7 +1,10 @@
 ﻿using UnityEngine;
 using Unity.MLAgents;
 using Unity.MLAgents.Sensors;
+using Unity.MLAgents.Actuators;
 using System.Collections.Generic;
+using Unity.FPS.Gameplay;
+using Unity.FPS.Game;
 
 public class LagHunterAgent : Agent
 {
@@ -19,6 +22,7 @@ public class LagHunterAgent : Agent
     public int passiMassimiPerEpisodio = 7000;
 
     private Vector3 posizioneIniziale;
+    private float velocitaVerticale = 0f;
 
     // Sistema Anti-Incastro e Esplorazione
     private HashSet<Vector3Int> celleVisitate = new HashSet<Vector3Int>();
@@ -34,7 +38,23 @@ public class LagHunterAgent : Agent
 
         if (aiAssistant == null)
         {
-            aiAssistant = FindObjectOfType<AIAssistant>();
+            aiAssistant = Object.FindAnyObjectByType<AIAssistant>();
+        }
+    }
+
+    private void ResuscitaECura()
+    {
+        if (playerCharacterController != null)
+        {
+            // Impostiamo a false lo stato di morte sul controller di gioco
+            playerCharacterController.IsDead = false;
+
+            // Troviamo il componente Health presente sullo stesso GameObject del bot
+            Health health = playerCharacterController.GetComponent<Health>();
+            if (health != null)
+            {
+                health.Heal(999f); // Cura completamente l'agente
+            }
         }
     }
 
@@ -42,10 +62,7 @@ public class LagHunterAgent : Agent
     public override void OnEpisodeBegin()
     {
         // Resetta lo stato di vita e cura il giocatore prima di muoverlo
-        if (playerCharacterController != null)
-        {
-            playerCharacterController.ResuscitaECura();
-        }
+        ResuscitaECura();
 
         // Resetta il bot alla posizione iniziale
         characterController.enabled = false;
@@ -60,7 +77,7 @@ public class LagHunterAgent : Agent
     void FixedUpdate()
     {
         // Controllo morte
-        if (playerCharacterController != null && playerCharacterController.isDead)
+        if (playerCharacterController != null && playerCharacterController.IsDead)
         {
             AddReward(-3.0f);
             EndEpisode(); // Forza il reset immediato dell'episodio
@@ -87,24 +104,36 @@ public class LagHunterAgent : Agent
     }
 
     // Cosa fa l'IA e come viene ricompensata
-    public override void OnActionReceived(float[] vectorAction)
+    public override void OnActionReceived(ActionBuffers actions)
     {
-        if (playerCharacterController != null && playerCharacterController.isDead)
+        if (playerCharacterController != null && playerCharacterController.IsDead)
         {
             return;
         }
 
-        // Riceve i comandi continui da Python (valori da -1 a +1)
-        float inputMovimentoAvanti = vectorAction[0]; // Avanti / Indietro
-        float inputRotazione = vectorAction[1];       // Ruota la visuale
+        // Riceve i comandi continui da Python tramite ContinuousActions
+        float inputMovimentoAvanti = actions.ContinuousActions[0]; // Avanti / Indietro
+        float inputRotazione = actions.ContinuousActions[1];       // Ruota la visuale
 
         transform.Rotate(Vector3.up * inputRotazione * velocitaRotazione * Time.fixedDeltaTime);
-        Vector3 direzione = transform.forward * inputMovimentoAvanti;
+        Vector3 direzione = transform.forward * inputMovimentoAvanti * velocitaMovimento;
+
+        if (characterController.isGrounded)
+        {
+            // Se è a terra, da una leggera spinta costante verso il basso (-2) 
+            // che costringe il controller a rimanere incollato ai pavimenti in discesa
+            velocitaVerticale = -2f;
+        }
+        else
+        {
+            // Se è in aria, accumula la gravità verso il basso frame dopo frame
+            velocitaVerticale += Physics.gravity.y * Time.fixedDeltaTime;
+        }
 
         // Applica la gravità base
-        direzione.y = Physics.gravity.y * Time.fixedDeltaTime;
+        direzione.y = velocitaVerticale;
 
-        characterController.Move(direzione * velocitaMovimento * Time.fixedDeltaTime);
+        characterController.Move(direzione * Time.fixedDeltaTime);
 
         // Algoritmo di apprendimento
         float lagAttuale = (aiAssistant != null) ? aiAssistant.ratio_FrameTime : 1.0f;
@@ -133,9 +162,10 @@ public class LagHunterAgent : Agent
     }
 
     // Permette di guidare il bot manualmente con le frecce della tastiera per test
-    public override void Heuristic(float[] actionsOut)
+    public override void Heuristic(in ActionBuffers actionsOut)
     {
-        actionsOut[0] = Input.GetAxis("Vertical");
-        actionsOut[1] = Input.GetAxis("Horizontal");
+        ActionSegment<float> continuousActions = actionsOut.ContinuousActions;
+        continuousActions[0] = Input.GetAxis("Vertical");
+        continuousActions[1] = Input.GetAxis("Horizontal");
     }
 }

@@ -1,9 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections;
-using TMPro;
-using System.Linq;
-using ML;
 using UnityEngine.Profiling;
+using Unity.Profiling;
 
 public class AIAssistant : MonoBehaviour
 {
@@ -70,6 +68,7 @@ public class AIAssistant : MonoBehaviour
     private float timerAnalisi = 0f;
 
     private Recorder cpuRecorder;
+    private ProfilerRecorder batchesRecorder;
 
     void Awake()
     {
@@ -77,7 +76,7 @@ public class AIAssistant : MonoBehaviour
         originalLODBias = QualitySettings.lodBias;
         originalVSync = QualitySettings.vSyncCount;
         originalShadowDistance = QualitySettings.shadowDistance;
-        originalTextureLimit = QualitySettings.masterTextureLimit;
+        originalTextureLimit = QualitySettings.globalTextureMipmapLimit;
 
         Sampler sampler = Sampler.Get("PlayerLoop");
         if (sampler != null)
@@ -85,6 +84,14 @@ public class AIAssistant : MonoBehaviour
             cpuRecorder = sampler.GetRecorder();
             cpuRecorder.enabled = true;
         }
+
+        batchesRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Batches Count");
+    }
+
+    void OnDestroy()
+    {
+        if (batchesRecorder.Valid)
+            batchesRecorder.Dispose();
     }
 
     IEnumerator Start()
@@ -146,7 +153,7 @@ public class AIAssistant : MonoBehaviour
         while (t < durata)
         {
             sommaFT += Time.unscaledDeltaTime * 1000f;
-            sommaBatches += UnityEditor.UnityStats.batches;
+            sommaBatches += GetBatchesCount();
             sommaCPU += GetCPUTime();
             sommaMemory += (System.GC.GetTotalMemory(false) + Profiler.GetAllocatedMemoryForGraphicsDriver()) / 1048576f;
 
@@ -179,7 +186,7 @@ public class AIAssistant : MonoBehaviour
         Application.targetFrameRate = originalFrameRate;
         QualitySettings.shadowDistance = originalShadowDistance;
         QualitySettings.lodBias = originalLODBias;
-        QualitySettings.masterTextureLimit = originalTextureLimit;
+        QualitySettings.globalTextureMipmapLimit = originalTextureLimit;
         QualitySettings.maximumLODLevel = 0;
 
         Time.fixedDeltaTime = 0.02f;
@@ -199,13 +206,22 @@ public class AIAssistant : MonoBehaviour
         return Time.unscaledDeltaTime * 1000f * 0.6f;
     }
 
+    float GetBatchesCount()
+    {
+        if (batchesRecorder.Valid)
+        {
+            return batchesRecorder.LastValue;
+        }
+        return 100f; // Valore di fallback generico se il profiler non è ancora pronto
+    }
+
     void EseguiDiagnosiIA()
     {
         float currentCPU = GetCPUTime();
         float currentMem = (System.GC.GetTotalMemory(false) + Profiler.GetAllocatedMemoryForGraphicsDriver()) / 1048576f;
 
         double ratioFT = (Time.unscaledDeltaTime * 1000f) / baselineFT;
-        double ratioBT = (double)UnityEditor.UnityStats.batches / baselineBatches;
+        double ratioBT = (double)GetBatchesCount() / baselineBatches;
         double ratioCPU = currentCPU / baselineCPU;
         double ratioMem = currentMem / baselineMemory;
 
@@ -322,7 +338,7 @@ public class AIAssistant : MonoBehaviour
                 break;
             case 2: // MEMORY
                 nomeProblema = "MEMORY";
-                QualitySettings.masterTextureLimit = 2;
+                QualitySettings.globalTextureMipmapLimit = 2;
                 Resources.UnloadUnusedAssets();
                 System.GC.Collect();
                 Debug.Log("<color=magenta>[AI]</color> Memory Fix");
@@ -347,7 +363,7 @@ public class AIAssistant : MonoBehaviour
         if (Application.targetFrameRate == originalFrameRate &&
             QualitySettings.lodBias == originalLODBias &&
             QualitySettings.shadowDistance == originalShadowDistance &&
-            QualitySettings.masterTextureLimit == originalTextureLimit &&
+            QualitySettings.globalTextureMipmapLimit == originalTextureLimit &&
             risoluzioneAttuale >= 1.0f) return;
 
         cooldownAttuale = 1.5f; // Mette in pausa per 1.5 secondi per far stabilizzare il frame dopo l'aumento
@@ -394,9 +410,9 @@ public class AIAssistant : MonoBehaviour
         }
 
         // Texture e framerate
-        if (QualitySettings.masterTextureLimit != originalTextureLimit || Application.targetFrameRate != originalFrameRate)
+        if (QualitySettings.globalTextureMipmapLimit != originalTextureLimit || Application.targetFrameRate != originalFrameRate)
         {
-            QualitySettings.masterTextureLimit = originalTextureLimit;
+            QualitySettings.globalTextureMipmapLimit = originalTextureLimit;
             Application.targetFrameRate = originalFrameRate;
             Debug.Log("<color=green>[AI]</color> Ripristino Graduale: Qualità Texture normalizzata. Sistema 100% stabile.");
             return;
@@ -405,7 +421,7 @@ public class AIAssistant : MonoBehaviour
         Application.targetFrameRate = originalFrameRate;
         QualitySettings.shadowDistance = originalShadowDistance;
         QualitySettings.lodBias = originalLODBias;
-        QualitySettings.masterTextureLimit = originalTextureLimit;
+        QualitySettings.globalTextureMipmapLimit = originalTextureLimit;
         QualitySettings.maximumLODLevel = 0;
 
         Time.fixedDeltaTime = 0.02f;
