@@ -41,7 +41,7 @@ public class AIAssistant : MonoBehaviour
 
     [Header("Debug Ratios (Sola Lettura)")]
     public float ratio_FrameTime;
-    public float ratio_Batches;
+    public float ratio_GPU;
     public float ratio_CPU;
     public float ratio_Memory;
 
@@ -55,7 +55,7 @@ public class AIAssistant : MonoBehaviour
     private float smoothedDeltaTime = 0.0f;
 
     private float baselineFT = 0f;
-    private float baselineBatches = 0f;
+    private float baselineGPU = 0f;
     private float baselineCPU = 0f;
     private float baselineMemory = 0f;
 
@@ -68,7 +68,7 @@ public class AIAssistant : MonoBehaviour
     private float timerAnalisi = 0f;
 
     private Recorder cpuRecorder;
-    private ProfilerRecorder batchesRecorder;
+    private ProfilerRecorder gpuRecorder;
 
     void Awake()
     {
@@ -85,13 +85,13 @@ public class AIAssistant : MonoBehaviour
             cpuRecorder.enabled = true;
         }
 
-        batchesRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Batches Count");
+        gpuRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "GPU Frame Time");
     }
 
     void OnDestroy()
     {
-        if (batchesRecorder.Valid)
-            batchesRecorder.Dispose();
+        if (gpuRecorder.Valid)
+            gpuRecorder.Dispose();
     }
 
     IEnumerator Start()
@@ -144,7 +144,7 @@ public class AIAssistant : MonoBehaviour
         RipristinaSenzaCooldown();
 
         float sommaFT = 0;
-        float sommaBatches = 0;
+        float sommaGPU = 0;
         float sommaCPU = 0;
         float sommaMemory = 0;
         int campioni = 0;
@@ -153,7 +153,7 @@ public class AIAssistant : MonoBehaviour
         while (t < durata)
         {
             sommaFT += Time.unscaledDeltaTime * 1000f;
-            sommaBatches += GetBatchesCount();
+            sommaGPU += GetGPUTime();
             sommaCPU += GetCPUTime();
             sommaMemory += (System.GC.GetTotalMemory(false) + Profiler.GetAllocatedMemoryForGraphicsDriver()) / 1048576f;
 
@@ -165,19 +165,19 @@ public class AIAssistant : MonoBehaviour
         if (campioni > 0)
         {
             baselineFT = sommaFT / campioni;
-            baselineBatches = sommaBatches / campioni;
+            baselineGPU = sommaGPU / campioni;
             baselineCPU = sommaCPU / campioni;
             baselineMemory = sommaMemory / campioni;
 
-            if (baselineBatches <= 0) baselineBatches = 1;
-            if (baselineCPU <= 0) baselineCPU = 1;
+            if (baselineGPU <= 0.1f) baselineGPU = 1f;
+            if (baselineCPU <= 0.1f) baselineCPU = 1f;
         }
 
         calibrato = true;
         inCalibrazione = false;
         statoAttuale = "Sistema Pronto";
 
-        Debug.Log($"<color=green>[AI]</color> Nuova Baseline salvata! FPS: {1000f / baselineFT:F0}, Batches: {baselineBatches:F0}, RAM: {baselineMemory:F0}MB");
+        Debug.Log($"<color=green>[AI]</color> Nuova Baseline salvata! FPS: {1000f / baselineFT:F0}, GPU Time: {baselineGPU:F2}ms, CPU Time: {baselineCPU:F2}ms, RAM: {baselineMemory:F0}MB");
     }
 
     // Metodo di utilità per resettare i filtri senza far scattare il timer di pausa
@@ -206,28 +206,29 @@ public class AIAssistant : MonoBehaviour
         return Time.unscaledDeltaTime * 1000f * 0.6f;
     }
 
-    float GetBatchesCount()
+    float GetGPUTime()
     {
-        if (batchesRecorder.Valid)
+        if (gpuRecorder.Valid && gpuRecorder.LastValue > 0)
         {
-            return batchesRecorder.LastValue;
+           return gpuRecorder.LastValue / 1000000f;
         }
-        return 100f; // Valore di fallback generico se il profiler non è ancora pronto
+        return 1.0f; // Valore di fallback generico se il profiler non è ancora pronto
     }
 
     void EseguiDiagnosiIA()
     {
         float currentCPU = GetCPUTime();
+        float currentGPU = GetGPUTime();
         float currentMem = (System.GC.GetTotalMemory(false) + Profiler.GetAllocatedMemoryForGraphicsDriver()) / 1048576f;
 
         double ratioFT = (Time.unscaledDeltaTime * 1000f) / baselineFT;
-        double ratioBT = (double)GetBatchesCount() / baselineBatches;
+        double ratioGPU = (double)currentGPU / baselineGPU;
         double ratioCPU = currentCPU / baselineCPU;
         double ratioMem = currentMem / baselineMemory;
 
         // Aggiorna info nell'Inspector
         ratio_FrameTime = (float)ratioFT;
-        ratio_Batches = (float)ratioBT;
+        ratio_GPU = (float)ratioGPU;
         ratio_CPU = (float)ratioCPU;
         ratio_Memory = (float)ratioMem;
 
@@ -239,7 +240,7 @@ public class AIAssistant : MonoBehaviour
         }
 
         // Preparazione Input per il modello
-        double[] inputIA = new double[] { ratioFT, ratioBT, ratioCPU, ratioMem };
+        double[] inputIA = new double[] { ratioFT, ratioGPU, ratioCPU, ratioMem };
         double[] risultati;
 
         if (modelloDaUsare == TipoIA.Random_Forest_Precisa)
@@ -274,16 +275,11 @@ public class AIAssistant : MonoBehaviour
         // Ordine alfabetico Scikit-Learn: 0:CPU, 1:GPU, 2:MEMORY, 3:NORMAL, 4:PHYSICS
         switch (indice)
         {
-            case 0: 
-                statoAttuale = "Stress CPU"; break;
-            case 1: 
-                statoAttuale = "Stress GPU"; break;
-            case 2: 
-                statoAttuale = "Memory Leak"; break;
-            case 3: 
-                statoAttuale = "Performance OK"; break;
-            case 4: 
-                statoAttuale = "Stress Fisica"; break;
+            case 0: statoAttuale = "Stress CPU"; break;
+            case 1: statoAttuale = "Stress GPU"; break;
+            case 2: statoAttuale = "Memory Leak"; break;
+            case 3: statoAttuale = "Performance OK"; break;
+            case 4: statoAttuale = "Stress Fisica"; break;
         }
 
         if (!correzioneAutomatica) return;
