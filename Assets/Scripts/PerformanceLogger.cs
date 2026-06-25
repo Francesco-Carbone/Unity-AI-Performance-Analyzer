@@ -13,7 +13,8 @@ public class PerformanceLogger : MonoBehaviour
     [HideInInspector] public string scenarioLabel = "CALIBRATION";
 
     private Recorder cpuRecorder;
-    private ProfilerRecorder batchesRecorder;
+    private ProfilerRecorder gpuRecorder;
+    private ProfilerRecorder physicsRecorder;
 
     void Awake()
     {
@@ -31,7 +32,8 @@ public class PerformanceLogger : MonoBehaviour
             cpuRecorder.enabled = true;
         }
 
-        batchesRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Batches Count");
+        gpuRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "GPU Frame Time");
+        physicsRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Physics, "Physics Simulation Time");
 
         // Crea il file di log
         try
@@ -39,7 +41,7 @@ public class PerformanceLogger : MonoBehaviour
             // Scrive l'intestazione
             if (!File.Exists(filePath))
             {
-                File.WriteAllText(filePath, "Label,Time_sec,FrameTime_ms,FPS,Batches_DrawCalls,MainThreadTime_ms,Memory_MB\n");
+                File.WriteAllText(filePath, "Label,Time_sec,FrameTime_ms,FPS,GPUTime_ms,MainThreadTime_ms,PhysicsTime_ms,Memory_MB\n");
             }
             UnityEngine.Debug.Log("<color=green>File CSV inizializzato con successo!</color>");
         }
@@ -51,8 +53,8 @@ public class PerformanceLogger : MonoBehaviour
 
     void OnDestroy()
     {
-        if (batchesRecorder.Valid)
-            batchesRecorder.Dispose();
+        if (gpuRecorder.Valid) gpuRecorder.Dispose();
+        if (physicsRecorder.Valid) physicsRecorder.Dispose();
     }
 
     void Update()
@@ -65,13 +67,22 @@ public class PerformanceLogger : MonoBehaviour
         }
     }
 
-    float GetBatchesCount()
+    float GetGPUTime()
     {
-        if (batchesRecorder.Valid)
+        if (gpuRecorder.Valid && gpuRecorder.LastValue > 0)
         {
-            return batchesRecorder.LastValue;
+            return gpuRecorder.LastValue / 1000000f;
         }
-        return 100f; // Valore di fallback generico se il profiler non è ancora pronto
+        return 1.0f; // Valore di fallback se la GPU non ha ancora risposto
+    }
+
+    float GetPhysicsTime()
+    {
+        if (physicsRecorder.Valid && physicsRecorder.LastValue > 0)
+        {
+            return physicsRecorder.LastValue / 1000000f;
+        }
+        return 0.1f; // Fallback minimo se non ci sono calcoli fisici attivi
     }
 
     void LogData()
@@ -90,18 +101,16 @@ public class PerformanceLogger : MonoBehaviour
             cpuMainTime = frameTime * 0.7f;
         }
 
-        int batches = 0;
-#if UNITY_EDITOR
-        batches = (int)GetBatchesCount();
-#endif
+        float gpuTimeMs = GetGPUTime();
+        float physicsTimeMS = GetPhysicsTime();
 
         float ramMB = System.GC.GetTotalMemory(false) / 1048576f;
         float vramMB = Profiler.GetAllocatedMemoryForGraphicsDriver() / 1048576f;
         float memoryMB = ramMB + vramMB;
 
         string riga = string.Format(System.Globalization.CultureInfo.InvariantCulture,
-            "{0},{1:F2},{2:F2},{3:F0},{4},{5:F2},{6:F2}\n", 
-            scenarioLabel, Time.timeSinceLevelLoad, frameTime, fps, batches, cpuMainTime, memoryMB);
+            "{0},{1:F2},{2:F2},{3:F0},{4:F2},{5:F2},{6:F2},{7:F2}\n", 
+            scenarioLabel, Time.timeSinceLevelLoad, frameTime, fps, gpuTimeMs, cpuMainTime, physicsTimeMS, memoryMB);
         
         try
         {

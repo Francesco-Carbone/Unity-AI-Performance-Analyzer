@@ -43,6 +43,7 @@ public class AIAssistant : MonoBehaviour
     public float ratio_FrameTime;
     public float ratio_GPU;
     public float ratio_CPU;
+    public float ratio_Physics;
     public float ratio_Memory;
 
     [HideInInspector] public string statoAttuale = "Performance Ok";
@@ -57,6 +58,7 @@ public class AIAssistant : MonoBehaviour
     private float baselineFT = 0f;
     private float baselineGPU = 0f;
     private float baselineCPU = 0f;
+    private float baselinePhysics = 0f;
     private float baselineMemory = 0f;
 
     [Header("Tasti Debug")]
@@ -69,6 +71,7 @@ public class AIAssistant : MonoBehaviour
 
     private Recorder cpuRecorder;
     private ProfilerRecorder gpuRecorder;
+    private ProfilerRecorder physicsRecorder;
 
     void Awake()
     {
@@ -90,8 +93,8 @@ public class AIAssistant : MonoBehaviour
 
     void OnDestroy()
     {
-        if (gpuRecorder.Valid)
-            gpuRecorder.Dispose();
+        if (gpuRecorder.Valid) gpuRecorder.Dispose();
+        if (physicsRecorder.Valid) physicsRecorder.Dispose();
     }
 
     IEnumerator Start()
@@ -146,6 +149,7 @@ public class AIAssistant : MonoBehaviour
         float sommaFT = 0;
         float sommaGPU = 0;
         float sommaCPU = 0;
+        float sommaPhysics = 0;
         float sommaMemory = 0;
         int campioni = 0;
         float t = 0;
@@ -155,6 +159,7 @@ public class AIAssistant : MonoBehaviour
             sommaFT += Time.unscaledDeltaTime * 1000f;
             sommaGPU += GetGPUTime();
             sommaCPU += GetCPUTime();
+            sommaPhysics += GetPhysicsTime();
             sommaMemory += (System.GC.GetTotalMemory(false) + Profiler.GetAllocatedMemoryForGraphicsDriver()) / 1048576f;
 
             campioni++;
@@ -167,17 +172,19 @@ public class AIAssistant : MonoBehaviour
             baselineFT = sommaFT / campioni;
             baselineGPU = sommaGPU / campioni;
             baselineCPU = sommaCPU / campioni;
+            baselinePhysics = sommaPhysics / campioni;
             baselineMemory = sommaMemory / campioni;
 
             if (baselineGPU <= 0.1f) baselineGPU = 1f;
             if (baselineCPU <= 0.1f) baselineCPU = 1f;
+            if (baselinePhysics <= 0.1f) baselinePhysics = 1f;
         }
 
         calibrato = true;
         inCalibrazione = false;
         statoAttuale = "Sistema Pronto";
 
-        Debug.Log($"<color=green>[AI]</color> Nuova Baseline salvata! FPS: {1000f / baselineFT:F0}, GPU Time: {baselineGPU:F2}ms, CPU Time: {baselineCPU:F2}ms, RAM: {baselineMemory:F0}MB");
+        Debug.Log($"<color=green>[AI]</color> Nuova Baseline salvata! FPS: {1000f / baselineFT:F0}, GPU Time: {baselineGPU:F2}ms, CPU Time: {baselineCPU:F2}ms, Physics: {baselinePhysics:F2}ms, RAM: {baselineMemory:F0}MB");
     }
 
     // Metodo di utilità per resettare i filtri senza far scattare il timer di pausa
@@ -215,21 +222,33 @@ public class AIAssistant : MonoBehaviour
         return 1.0f; // Valore di fallback generico se il profiler non è ancora pronto
     }
 
+    float GetPhysicsTime()
+    {
+        if (physicsRecorder.Valid && physicsRecorder.LastValue > 0)
+        {
+            return physicsRecorder.LastValue / 1000000f;
+        }
+        return 0.1f;
+    }
+
     void EseguiDiagnosiIA()
     {
         float currentCPU = GetCPUTime();
         float currentGPU = GetGPUTime();
+        float currentPhysics = GetPhysicsTime();
         float currentMem = (System.GC.GetTotalMemory(false) + Profiler.GetAllocatedMemoryForGraphicsDriver()) / 1048576f;
 
         double ratioFT = (Time.unscaledDeltaTime * 1000f) / baselineFT;
         double ratioGPU = (double)currentGPU / baselineGPU;
         double ratioCPU = currentCPU / baselineCPU;
+        double ratioPhysics = currentPhysics / baselinePhysics;
         double ratioMem = currentMem / baselineMemory;
 
         // Aggiorna info nell'Inspector
         ratio_FrameTime = (float)ratioFT;
         ratio_GPU = (float)ratioGPU;
         ratio_CPU = (float)ratioCPU;
+        ratio_Physics = (float)ratioPhysics;
         ratio_Memory = (float)ratioMem;
 
         // Se le prestazioni sono entro il cap forza NORMAL.
@@ -240,7 +259,7 @@ public class AIAssistant : MonoBehaviour
         }
 
         // Preparazione Input per il modello
-        double[] inputIA = new double[] { ratioFT, ratioGPU, ratioCPU, ratioMem };
+        double[] inputIA = new double[] { ratioFT, ratioGPU, ratioCPU, ratioPhysics, ratioMem };
         double[] risultati;
 
         if (modelloDaUsare == TipoIA.Random_Forest_Precisa)
