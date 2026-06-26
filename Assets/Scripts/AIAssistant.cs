@@ -71,7 +71,6 @@ public class AIAssistant : MonoBehaviour
 
     private Recorder cpuRecorder;
     private ProfilerRecorder gpuRecorder;
-    private ProfilerRecorder physicsRecorder;
 
     void Awake()
     {
@@ -94,7 +93,6 @@ public class AIAssistant : MonoBehaviour
     void OnDestroy()
     {
         if (gpuRecorder.Valid) gpuRecorder.Dispose();
-        if (physicsRecorder.Valid) physicsRecorder.Dispose();
     }
 
     IEnumerator Start()
@@ -159,7 +157,7 @@ public class AIAssistant : MonoBehaviour
             sommaFT += Time.unscaledDeltaTime * 1000f;
             sommaGPU += GetGPUTime();
             sommaCPU += GetCPUTime();
-            sommaPhysics += GetPhysicsTime();
+            sommaPhysics += GetPhysicsObjects();
             sommaMemory += (System.GC.GetTotalMemory(false) + Profiler.GetAllocatedMemoryForGraphicsDriver()) / 1048576f;
 
             campioni++;
@@ -184,7 +182,7 @@ public class AIAssistant : MonoBehaviour
         inCalibrazione = false;
         statoAttuale = "Sistema Pronto";
 
-        Debug.Log($"<color=green>[AI]</color> Nuova Baseline salvata! FPS: {1000f / baselineFT:F0}, GPU Time: {baselineGPU:F2}ms, CPU Time: {baselineCPU:F2}ms, Physics: {baselinePhysics:F2}ms, RAM: {baselineMemory:F0}MB");
+        Debug.Log($"<color=green>[AI]</color> Nuova Baseline salvata! FPS: {1000f / baselineFT:F0}, GPU Time: {baselineGPU:F2}ms, CPU Time: {baselineCPU:F2}ms, Physics: {baselinePhysics:F2}, RAM: {baselineMemory:F0}MB");
     }
 
     // Metodo di utilità per resettare i filtri senza far scattare il timer di pausa
@@ -222,20 +220,28 @@ public class AIAssistant : MonoBehaviour
         return 1.0f; // Valore di fallback generico se il profiler non è ancora pronto
     }
 
-    float GetPhysicsTime()
+    float GetPhysicsObjects()
     {
-        if (physicsRecorder.Valid && physicsRecorder.LastValue > 0)
+        Rigidbody[] rigidbodies = FindObjectsByType<Rigidbody>(FindObjectsInactive.Exclude);
+        int activeCount = 0;
+
+        foreach (Rigidbody rb in rigidbodies)
         {
-            return physicsRecorder.LastValue / 1000000f;
+            // Conta solo gli oggetti che stanno attivamente calcolando collisioni/gravità
+            if (!rb.IsSleeping())
+            {
+                activeCount++;
+            }
         }
-        return 0.1f;
+
+        return activeCount > 0 ? (float)activeCount : 0.1f;
     }
 
     void EseguiDiagnosiIA()
     {
         float currentCPU = GetCPUTime();
         float currentGPU = GetGPUTime();
-        float currentPhysics = GetPhysicsTime();
+        float currentPhysics = GetPhysicsObjects();
         float currentMem = (System.GC.GetTotalMemory(false) + Profiler.GetAllocatedMemoryForGraphicsDriver()) / 1048576f;
 
         double ratioFT = (Time.unscaledDeltaTime * 1000f) / baselineFT;
