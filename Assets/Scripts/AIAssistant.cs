@@ -307,6 +307,11 @@ public class AIAssistant : MonoBehaviour
             case 4: statoAttuale = "Stress Fisica"; break;
         }
 
+        if (indice != 3)
+        {
+            LogIssue(indice);
+        }
+
         if (!correzioneAutomatica) return;
 
         // Gestione Logica Autopilota
@@ -330,21 +335,35 @@ public class AIAssistant : MonoBehaviour
         }
     }
 
+    void LogIssue(int tipo)
+    {
+        if (heatmapLogger == null || cooldownAttuale > 0) return;
+
+        string nomeProblema = "";
+        switch (tipo)
+        {
+            case 0: nomeProblema = "CPU"; break;
+            case 1: nomeProblema = "GPU"; break;
+            case 2: nomeProblema = "MEMORY"; break;
+            case 4: nomeProblema = "PHYSICS"; break;
+            default: return;
+        }
+
+        heatmapLogger.RecordIssue(nomeProblema, ratio_FrameTime);
+    }
+
     void Intervieni(int tipo)
     {
         cooldownAttuale = tempoDiCooldown;
-        string nomeProblema = "";
 
         switch (tipo)
         {
             case 0: // CPU
-                nomeProblema = "CPU";
                 QualitySettings.lodBias = 0.1f;
                 QualitySettings.maximumLODLevel = 2;
                 Debug.Log("<color=orange>[AI]</color> CPU Fix");
                 break;
             case 1: // GPU
-                nomeProblema = "GPU";
                 if (risoluzioneAttuale > risoluzioneMinima)
                 {
                     risoluzioneAttuale = Mathf.Max(risoluzioneMinima, risoluzioneAttuale - stepRisoluzione);
@@ -358,23 +377,16 @@ public class AIAssistant : MonoBehaviour
                 }
                 break;
             case 2: // MEMORY
-                nomeProblema = "MEMORY";
                 QualitySettings.globalTextureMipmapLimit = 2;
                 Resources.UnloadUnusedAssets();
                 System.GC.Collect();
                 Debug.Log("<color=magenta>[AI]</color> Memory Fix");
                 break;
             case 4: // PHYSICS
-                nomeProblema = "PHYSICS";
                 Time.fixedDeltaTime = 0.06f; // Solo ~16 calcoli fisici al secondo (invece di 50)
                 Physics.defaultSolverIterations = 1; // Precisione collisioni minima
                 Debug.Log("<color=cyan>[AI]</color> Physics Fix");
                 break;
-        }
-
-        if (heatmapLogger != null)
-        {
-            heatmapLogger.RecordIssue(nomeProblema, ratio_FrameTime);
         }
     }
 

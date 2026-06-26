@@ -5,26 +5,29 @@ using System.Globalization;
 
 public class PerformanceHeatmap : MonoBehaviour
 {
-    [Header("Opzioni Screenshot")]
-    [Tooltip("Attiva per scattare una foto del gioco durante i lag gravi")]
-    public bool abilitaScreenshot = true;
-
-    [Tooltip("Scatta se il Ratio di lag supera questo valore (es. 1.8 significa lag molto visibile)")]
-    public float sogliaScreenshot = 1.8f;
-
     private string logPath;
-    private string cartellaScreenshots;
+    private string screenshotFolder;
     private Transform targetTransform;
     private bool playerTrack = false;
+
+    [Header("Configurazione Screenshot")]
+    [Tooltip("Minimi secondi tra uno screenshot e l'altro per evitare spam")]
+    public float minScreenshotInterval = 10.0f;
+    private float lastScreenshotTime = -999f;
 
     void Awake()
     {
         AggiornaTarget();
 
-        // Crea il percorso del file CSV e della cartella per le foto
+        // Crea il percorso del file
         string rootPath = Directory.GetParent(Application.dataPath).FullName;
         logPath = Path.Combine(rootPath, "PerformanceHeatmap.csv");
-        cartellaScreenshots = Path.Combine(rootPath, "DebugScreenshots");
+        screenshotFolder = Path.Combine(rootPath, "PerformanceScreenshots");
+
+        if (!Directory.Exists(screenshotFolder))
+        {
+            Directory.CreateDirectory(screenshotFolder);
+        }
 
         // Se il file non esiste, crea l'intestazione
         if (!File.Exists(logPath))
@@ -64,31 +67,22 @@ public class PerformanceHeatmap : MonoBehaviour
         if (targetTransform == null) return;
 
         Vector3 pos = targetTransform.position;
-
-        System.DateTime now = System.DateTime.Now;
-        string timestampCSV = now.ToString("yyyy-MM-dd HH:mm:ss");
-        string timestampFile = now.ToString("yyyy-MM-dd_HH-mm-ss");
+        string timestamp = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
         // Formatta la riga
         string line = string.Format(CultureInfo.InvariantCulture, "{0},{1:F2},{2:F2},{3:F2},{4},{5:F2}\n",
-            timestampCSV, pos.x, pos.y, pos.z, issueType, severity);
+            timestamp, pos.x, pos.y, pos.z, issueType, severity);
 
         File.AppendAllText(logPath, line);
 
-        if (abilitaScreenshot && severity >= sogliaScreenshot)
+        if (Time.time - lastScreenshotTime >= minScreenshotInterval) 
         {
-            // Crea la cartella non è presente
-            if (!Directory.Exists(cartellaScreenshots))
-            {
-                Directory.CreateDirectory(cartellaScreenshots);
-            }
+            string timeStampFile = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string fileName = $"Issue_{issueType}_{timeStampFile}.png";
+            string fullPath = Path.Combine(screenshotFolder, fileName);
 
-            // Crea il nome del file: es. 2026-05-28_16-30-00_GPU_STRESS_Lag2.1.png
-            string nomeFile = Path.Combine(cartellaScreenshots, $"{timestampFile}_{issueType}_Lag{severity:F1}.png");
-
-            ScreenCapture.CaptureScreenshot(nomeFile);
-
-            Debug.Log($"<color=cyan>[Heatmap]</color> Lag critico rilevato ({severity:F2}x). Screenshot salvato in DebugScreenshots!");
+            ScreenCapture.CaptureScreenshot(fullPath);
+            lastScreenshotTime = Time.time;
         }
     }
 }
