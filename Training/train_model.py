@@ -39,7 +39,7 @@ if calibration_data.empty:
 base_ft = calibration_data['FrameTime_ms'].median()
 base_gpu = calibration_data['GPUTime_ms'].median()
 base_cpu = calibration_data['MainThreadTime_ms'].median()
-base_physics = calibration_data['PhysicsTime_ms'].median()
+base_physics = calibration_data['PhysicsObjects'].median()
 base_mem = calibration_data['Memory_MB'].median()
 
 if base_gpu == 0: base_gpu = 1
@@ -51,7 +51,7 @@ df_train = df[df['Label'] != 'CALIBRATION'].copy()
 df_train['Delta_FT'] = df_train['FrameTime_ms'] / base_ft
 df_train['Delta_GPU'] = df_train['GPUTime_ms'] / base_gpu
 df_train['Delta_CPU'] = df_train['MainThreadTime_ms'] / base_cpu
-df_train['Delta_Physics'] = df_train['PhysicsTime_ms'] / base_physics
+df_train['Delta_Physics'] = df_train['PhysicsObjects'] / base_physics
 df_train['Delta_Mem'] = df_train['Memory_MB'] / base_mem
 
 # Selezione Feature e Target
