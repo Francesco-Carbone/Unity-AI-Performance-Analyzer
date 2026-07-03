@@ -8,7 +8,12 @@ public class HeatmapViewer : MonoBehaviour
     [Header("Configurazione")]
     public string nomeFile = "PerformanceHeatmap.csv";
     public float raggioSfera = 0.5f;
-    public bool mostraSempre = true;
+    [Tooltip("Se TRUE, mostra i Gizmos nell'Editor anche a heatmap spenta. Consigliato: FALSE.")]
+    public bool mostraSempre = false;
+
+    [Header("Unity 6 / URP Setup")]
+    [Tooltip("Crea un materiale trasparente nel Project (URP Lit o Unlit) e trascinalo qui.")]
+    public Material materialePersonalizzato;
 
     [Header("Filtri Categoria (Toggles)")]
     public bool mostraCPU = true;
@@ -35,6 +40,7 @@ public class HeatmapViewer : MonoBehaviour
     }
 
     private List<DatiPunto> puntiDaDisegnare = new List<DatiPunto>();
+    private MaterialPropertyBlock propBlock;
 
     void Update()
     {
@@ -104,15 +110,37 @@ public class HeatmapViewer : MonoBehaviour
         contenitoreInGame = new GameObject("Heatmap_InGame_Container");
 
         // Crea un materiale base (Trasparente e senza ombre)
-        Material matBase = new Material(Shader.Find("Standard"));
-        matBase.SetFloat("_Mode", 3); // Imposta il render mode su Transparent
-        matBase.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        matBase.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        matBase.SetInt("_ZWrite", 0);
-        matBase.DisableKeyword("_ALPHATEST_ON");
-        matBase.EnableKeyword("_ALPHABLEND_ON");
-        matBase.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-        matBase.renderQueue = 3000;
+        Material matBase = materialePersonalizzato;
+        if (matBase == null)
+        {
+            Shader urpShader = Shader.Find("Universal Render Pipeline/Lit");
+            if (urpShader == null) urpShader = Shader.Find("Standard"); // Fallback se non si usa URP
+
+            matBase = new Material(urpShader);
+
+            if (urpShader.name.Contains("Universal Render Pipeline"))
+            {
+                matBase.SetFloat("_Surface", 1); // 1 = Transparent
+                matBase.SetFloat("_Blend", 0);   // 0 = Alpha Blend
+                matBase.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                matBase.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                matBase.SetInt("_ZWrite", 0);
+                matBase.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                matBase.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            }
+            else
+            {
+                matBase.SetFloat("_Mode", 3); // Fallback standard
+                matBase.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                matBase.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                matBase.SetInt("_ZWrite", 0);
+                matBase.renderQueue = 3000;
+            }
+        }
+
+        // Inizializza il blocco proprietà ed identifica l'ID del canale colore
+        if (propBlock == null) propBlock = new MaterialPropertyBlock();
+        int colorPropertyID = matBase.HasProperty("_BaseColor") ? Shader.PropertyToID("_BaseColor") : Shader.PropertyToID("_Color");
 
         foreach (var punto in puntiDaDisegnare)
         {
@@ -142,10 +170,11 @@ public class HeatmapViewer : MonoBehaviour
             MeshRenderer renderer = sfera.GetComponent<MeshRenderer>();
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
+            renderer.sharedMaterial = matBase;
 
-            Material matSfera = new Material(matBase);
-            matSfera.color = colorePunto;
-            renderer.material = matSfera;
+            renderer.GetPropertyBlock(propBlock);
+            propBlock.SetColor(colorPropertyID, colorePunto);
+            renderer.SetPropertyBlock(propBlock);
         }
 
         Debug.Log("<color=cyan>[Heatmap]</color> Visualizzatore In-Game ATTIVATO.");
@@ -156,8 +185,17 @@ public class HeatmapViewer : MonoBehaviour
         if (contenitoreInGame != null)
         {
             Destroy(contenitoreInGame);
-            Debug.Log("<color=cyan>[Heatmap]</color> Visualizzatore In-Game DISATTIVATO.");
+            contenitoreInGame = null;
         }
+
+        GameObject residuo = GameObject.Find("Heatmap_InGame_Container");
+        if (residuo != null)
+        {
+            DestroyImmediate(residuo);
+        }
+        puntiDaDisegnare.Clear();
+
+        Debug.Log("<color=cyan>[Heatmap]</color> Visualizzatore In-Game DISATTIVATO.");
     }
 
     private void OnDrawGizmos()

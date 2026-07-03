@@ -60,13 +60,15 @@ public class PerformanceDashboard : MonoBehaviour
         testoRatiosTelemetria.text = string.Format(
             "--- Moltiplicatori Lag ---\n" +
             "Ratio FrameTime: {0:F2}x\n" +
-            "Ratio DrawCalls: {1:F2}x\n" +
+            "Ratio GPU Time : {1:F2}x\n" +
             "Ratio CPU Time : {2:F2}x\n" +
-            "Ratio Memory   : {3:F2}x\n" +
-            "Soglia Allarme : {4:F2}x",
+            "Ratio Physics  : {3:F2}x\n" +
+            "Ratio Memory   : {4:F2}x\n" +
+            "Soglia Allarme : {5:F2}x",
             aiAssistant.ratio_FrameTime,
-            aiAssistant.ratio_Batches,
+            aiAssistant.ratio_GPU,
             aiAssistant.ratio_CPU,
+            aiAssistant.ratio_Physics,
             aiAssistant.ratio_Memory,
             aiAssistant.sogliaAllarme
         );

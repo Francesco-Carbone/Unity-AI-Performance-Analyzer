@@ -1,9 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections;
-using TMPro;
-using System.Linq;
-using ML;
 using UnityEngine.Profiling;
+using Unity.Profiling;
 
 public class AIAssistant : MonoBehaviour
 {
@@ -43,8 +41,9 @@ public class AIAssistant : MonoBehaviour
 
     [Header("Debug Ratios (Sola Lettura)")]
     public float ratio_FrameTime;
-    public float ratio_Batches;
+    public float ratio_GPU;
     public float ratio_CPU;
+    public float ratio_Physics;
     public float ratio_Memory;
 
     [HideInInspector] public string statoAttuale = "Performance Ok";
@@ -57,8 +56,9 @@ public class AIAssistant : MonoBehaviour
     private float smoothedDeltaTime = 0.0f;
 
     private float baselineFT = 0f;
-    private float baselineBatches = 0f;
+    private float baselineGPU = 0f;
     private float baselineCPU = 0f;
+    private float baselinePhysics = 0f;
     private float baselineMemory = 0f;
 
     [Header("Tasti Debug")]
@@ -70,6 +70,7 @@ public class AIAssistant : MonoBehaviour
     private float timerAnalisi = 0f;
 
     private Recorder cpuRecorder;
+    private ProfilerRecorder gpuRecorder;
 
     void Awake()
     {
@@ -77,7 +78,7 @@ public class AIAssistant : MonoBehaviour
         originalLODBias = QualitySettings.lodBias;
         originalVSync = QualitySettings.vSyncCount;
         originalShadowDistance = QualitySettings.shadowDistance;
-        originalTextureLimit = QualitySettings.masterTextureLimit;
+        originalTextureLimit = QualitySettings.globalTextureMipmapLimit;
 
         Sampler sampler = Sampler.Get("PlayerLoop");
         if (sampler != null)
@@ -85,6 +86,13 @@ public class AIAssistant : MonoBehaviour
             cpuRecorder = sampler.GetRecorder();
             cpuRecorder.enabled = true;
         }
+
+        gpuRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "GPU Frame Time");
+    }
+
+    void OnDestroy()
+    {
+        if (gpuRecorder.Valid) gpuRecorder.Dispose();
     }
 
     IEnumerator Start()
@@ -137,8 +145,9 @@ public class AIAssistant : MonoBehaviour
         RipristinaSenzaCooldown();
 
         float sommaFT = 0;
-        float sommaBatches = 0;
+        float sommaGPU = 0;
         float sommaCPU = 0;
+        float sommaPhysics = 0;
         float sommaMemory = 0;
         int campioni = 0;
         float t = 0;
@@ -146,8 +155,9 @@ public class AIAssistant : MonoBehaviour
         while (t < durata)
         {
             sommaFT += Time.unscaledDeltaTime * 1000f;
-            sommaBatches += UnityEditor.UnityStats.batches;
+            sommaGPU += GetGPUTime();
             sommaCPU += GetCPUTime();
+            sommaPhysics += GetPhysicsObjects();
             sommaMemory += (System.GC.GetTotalMemory(false) + Profiler.GetAllocatedMemoryForGraphicsDriver()) / 1048576f;
 
             campioni++;
@@ -158,19 +168,21 @@ public class AIAssistant : MonoBehaviour
         if (campioni > 0)
         {
             baselineFT = sommaFT / campioni;
-            baselineBatches = sommaBatches / campioni;
+            baselineGPU = sommaGPU / campioni;
             baselineCPU = sommaCPU / campioni;
+            baselinePhysics = sommaPhysics / campioni;
             baselineMemory = sommaMemory / campioni;
 
-            if (baselineBatches <= 0) baselineBatches = 1;
-            if (baselineCPU <= 0) baselineCPU = 1;
+            if (baselineGPU <= 0.1f) baselineGPU = 1f;
+            if (baselineCPU <= 0.1f) baselineCPU = 1f;
+            if (baselinePhysics <= 0.1f) baselinePhysics = 1f;
         }
 
         calibrato = true;
         inCalibrazione = false;
         statoAttuale = "Sistema Pronto";
 
-        Debug.Log($"<color=green>[AI]</color> Nuova Baseline salvata! FPS: {1000f / baselineFT:F0}, Batches: {baselineBatches:F0}, RAM: {baselineMemory:F0}MB");
+        Debug.Log($"<color=green>[AI]</color> Nuova Baseline salvata! FPS: {1000f / baselineFT:F0}, GPU Time: {baselineGPU:F2}ms, CPU Time: {baselineCPU:F2}ms, Physics: {baselinePhysics:F2}, RAM: {baselineMemory:F0}MB");
     }
 
     // Metodo di utilità per resettare i filtri senza far scattare il timer di pausa
@@ -179,7 +191,7 @@ public class AIAssistant : MonoBehaviour
         Application.targetFrameRate = originalFrameRate;
         QualitySettings.shadowDistance = originalShadowDistance;
         QualitySettings.lodBias = originalLODBias;
-        QualitySettings.masterTextureLimit = originalTextureLimit;
+        QualitySettings.globalTextureMipmapLimit = originalTextureLimit;
         QualitySettings.maximumLODLevel = 0;
 
         Time.fixedDeltaTime = 0.02f;
@@ -199,20 +211,50 @@ public class AIAssistant : MonoBehaviour
         return Time.unscaledDeltaTime * 1000f * 0.6f;
     }
 
+    float GetGPUTime()
+    {
+        if (gpuRecorder.Valid && gpuRecorder.LastValue > 0)
+        {
+           return gpuRecorder.LastValue / 1000000f;
+        }
+        return 1.0f; // Valore di fallback generico se il profiler non è ancora pronto
+    }
+
+    float GetPhysicsObjects()
+    {
+        Rigidbody[] rigidbodies = FindObjectsByType<Rigidbody>(FindObjectsInactive.Exclude);
+        int activeCount = 0;
+
+        foreach (Rigidbody rb in rigidbodies)
+        {
+            // Conta solo gli oggetti che stanno attivamente calcolando collisioni/gravità
+            if (!rb.IsSleeping())
+            {
+                activeCount++;
+            }
+        }
+
+        return activeCount > 0 ? (float)activeCount : 0.1f;
+    }
+
     void EseguiDiagnosiIA()
     {
         float currentCPU = GetCPUTime();
+        float currentGPU = GetGPUTime();
+        float currentPhysics = GetPhysicsObjects();
         float currentMem = (System.GC.GetTotalMemory(false) + Profiler.GetAllocatedMemoryForGraphicsDriver()) / 1048576f;
 
         double ratioFT = (Time.unscaledDeltaTime * 1000f) / baselineFT;
-        double ratioBT = (double)UnityEditor.UnityStats.batches / baselineBatches;
+        double ratioGPU = (double)currentGPU / baselineGPU;
         double ratioCPU = currentCPU / baselineCPU;
+        double ratioPhysics = currentPhysics / baselinePhysics;
         double ratioMem = currentMem / baselineMemory;
 
         // Aggiorna info nell'Inspector
         ratio_FrameTime = (float)ratioFT;
-        ratio_Batches = (float)ratioBT;
+        ratio_GPU = (float)ratioGPU;
         ratio_CPU = (float)ratioCPU;
+        ratio_Physics = (float)ratioPhysics;
         ratio_Memory = (float)ratioMem;
 
         // Se le prestazioni sono entro il cap forza NORMAL.
@@ -223,7 +265,7 @@ public class AIAssistant : MonoBehaviour
         }
 
         // Preparazione Input per il modello
-        double[] inputIA = new double[] { ratioFT, ratioBT, ratioCPU, ratioMem };
+        double[] inputIA = new double[] { ratioFT, ratioGPU, ratioCPU, ratioPhysics, ratioMem };
         double[] risultati;
 
         if (modelloDaUsare == TipoIA.Random_Forest_Precisa)
@@ -258,16 +300,16 @@ public class AIAssistant : MonoBehaviour
         // Ordine alfabetico Scikit-Learn: 0:CPU, 1:GPU, 2:MEMORY, 3:NORMAL, 4:PHYSICS
         switch (indice)
         {
-            case 0: 
-                statoAttuale = "Stress CPU"; break;
-            case 1: 
-                statoAttuale = "Stress GPU"; break;
-            case 2: 
-                statoAttuale = "Memory Leak"; break;
-            case 3: 
-                statoAttuale = "Performance OK"; break;
-            case 4: 
-                statoAttuale = "Stress Fisica"; break;
+            case 0: statoAttuale = "Stress CPU"; break;
+            case 1: statoAttuale = "Stress GPU"; break;
+            case 2: statoAttuale = "Memory Leak"; break;
+            case 3: statoAttuale = "Performance OK"; break;
+            case 4: statoAttuale = "Stress Fisica"; break;
+        }
+
+        if (indice != 3)
+        {
+            LogIssue(indice);
         }
 
         if (!correzioneAutomatica) return;
@@ -293,21 +335,35 @@ public class AIAssistant : MonoBehaviour
         }
     }
 
+    void LogIssue(int tipo)
+    {
+        if (heatmapLogger == null || cooldownAttuale > 0) return;
+
+        string nomeProblema = "";
+        switch (tipo)
+        {
+            case 0: nomeProblema = "CPU"; break;
+            case 1: nomeProblema = "GPU"; break;
+            case 2: nomeProblema = "MEMORY"; break;
+            case 4: nomeProblema = "PHYSICS"; break;
+            default: return;
+        }
+
+        heatmapLogger.RecordIssue(nomeProblema, ratio_FrameTime);
+    }
+
     void Intervieni(int tipo)
     {
         cooldownAttuale = tempoDiCooldown;
-        string nomeProblema = "";
 
         switch (tipo)
         {
             case 0: // CPU
-                nomeProblema = "CPU";
                 QualitySettings.lodBias = 0.1f;
                 QualitySettings.maximumLODLevel = 2;
                 Debug.Log("<color=orange>[AI]</color> CPU Fix");
                 break;
             case 1: // GPU
-                nomeProblema = "GPU";
                 if (risoluzioneAttuale > risoluzioneMinima)
                 {
                     risoluzioneAttuale = Mathf.Max(risoluzioneMinima, risoluzioneAttuale - stepRisoluzione);
@@ -321,23 +377,16 @@ public class AIAssistant : MonoBehaviour
                 }
                 break;
             case 2: // MEMORY
-                nomeProblema = "MEMORY";
-                QualitySettings.masterTextureLimit = 2;
+                QualitySettings.globalTextureMipmapLimit = 2;
                 Resources.UnloadUnusedAssets();
                 System.GC.Collect();
                 Debug.Log("<color=magenta>[AI]</color> Memory Fix");
                 break;
             case 4: // PHYSICS
-                nomeProblema = "PHYSICS";
                 Time.fixedDeltaTime = 0.06f; // Solo ~16 calcoli fisici al secondo (invece di 50)
                 Physics.defaultSolverIterations = 1; // Precisione collisioni minima
                 Debug.Log("<color=cyan>[AI]</color> Physics Fix");
                 break;
-        }
-
-        if (heatmapLogger != null)
-        {
-            heatmapLogger.RecordIssue(nomeProblema, ratio_FrameTime);
         }
     }
 
@@ -347,7 +396,7 @@ public class AIAssistant : MonoBehaviour
         if (Application.targetFrameRate == originalFrameRate &&
             QualitySettings.lodBias == originalLODBias &&
             QualitySettings.shadowDistance == originalShadowDistance &&
-            QualitySettings.masterTextureLimit == originalTextureLimit &&
+            QualitySettings.globalTextureMipmapLimit == originalTextureLimit &&
             risoluzioneAttuale >= 1.0f) return;
 
         cooldownAttuale = 1.5f; // Mette in pausa per 1.5 secondi per far stabilizzare il frame dopo l'aumento
@@ -394,9 +443,9 @@ public class AIAssistant : MonoBehaviour
         }
 
         // Texture e framerate
-        if (QualitySettings.masterTextureLimit != originalTextureLimit || Application.targetFrameRate != originalFrameRate)
+        if (QualitySettings.globalTextureMipmapLimit != originalTextureLimit || Application.targetFrameRate != originalFrameRate)
         {
-            QualitySettings.masterTextureLimit = originalTextureLimit;
+            QualitySettings.globalTextureMipmapLimit = originalTextureLimit;
             Application.targetFrameRate = originalFrameRate;
             Debug.Log("<color=green>[AI]</color> Ripristino Graduale: Qualità Texture normalizzata. Sistema 100% stabile.");
             return;
@@ -405,7 +454,7 @@ public class AIAssistant : MonoBehaviour
         Application.targetFrameRate = originalFrameRate;
         QualitySettings.shadowDistance = originalShadowDistance;
         QualitySettings.lodBias = originalLODBias;
-        QualitySettings.masterTextureLimit = originalTextureLimit;
+        QualitySettings.globalTextureMipmapLimit = originalTextureLimit;
         QualitySettings.maximumLODLevel = 0;
 
         Time.fixedDeltaTime = 0.02f;

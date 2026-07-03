@@ -20,6 +20,10 @@ public class StressTester : MonoBehaviour
     [Tooltip("Quanti MB di memoria allocare ad ogni frame per il test RAM")]
     public int memoryStepMB = 40;
 
+    [Header("Unity 6 / URP Setup")]
+    [Tooltip("Opzionale: Trascina qui un materiale pesante per il test GPU. Se vuoto, ne verrà creato uno URP standard.")]
+    public Material materialeGpuStress;
+
     [Header("Modalità Autopilota")]
     [Tooltip("Attiva l'esecuzione automatica e casuale degli stress test.")]
     public bool usaAutopilota = false;
@@ -155,10 +159,9 @@ public class StressTester : MonoBehaviour
                 case 8: AttivaStressMemoria(memoryStepMB, "MEMORY_STRESS"); break;
             }
 
-            // Lascia agire il lag/stress per i secondi prestabiliti
             yield return new WaitForSeconds(durataEvento);
 
-            // Ferma l'evento e dà tempo al gioco (e all'IA) di recuperare prima del prossimo round
+            // Ferma l'evento
             FermaTutto();
             Debug.Log("Autopilota: Evento terminato. Fase di tregua...");
         }
@@ -170,7 +173,6 @@ public class StressTester : MonoBehaviour
         intensitaCpu = intensita;
         cpuStress = true;
         SetLabel(label);
-        //Debug.Log($"Attivato {label} - Intensità: {intensita}");
     }
 
     void AttivaStressGPU(int numeroOggetti, string label)
@@ -180,16 +182,50 @@ public class StressTester : MonoBehaviour
         numOggettiGpu = numeroOggetti;
         SetLabel(label);
 
-        Material mat = new Material(Shader.Find("Standard"));
+        // Lancia la creazione scaglionata per evitare il blocco della CPU
+        StartCoroutine(GeneraSfereGradualmente(numeroOggetti));
+    }
+
+    private IEnumerator GeneraSfereGradualmente(int numeroOggetti)
+    {
+        Material matBase = materialeGpuStress;
+        if (matBase == null)
+        {
+            Shader urpShader = Shader.Find("Universal Render Pipeline/Lit");
+            matBase = new Material(urpShader != null ? urpShader : Shader.Find("Standard"));
+            matBase.color = new Color(1f, 0f, 0f, 0.5f); // Rosso semi-trasparente di default
+        }
+
+        Transform camTransform = Camera.main != null ? Camera.main.transform : transform;
+        int sferePerFrame = 150; // Quante sfere creare per frame senza bloccare la CPU
+
         for (int i = 0; i < numeroOggetti; i++)
         {
             GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            go.transform.position = Random.insideUnitSphere * 15f;
+
+            // Genera esattamente al centro dell'inquadratura, ammassate per l'Overdraw
+            Vector3 offsetRandom = new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(1.5f, 3.5f));
+            go.transform.position = camTransform.position + camTransform.TransformDirection(offsetRandom);
+
             Destroy(go.GetComponent<SphereCollider>());
-            go.GetComponent<MeshRenderer>().material = mat;
+            MeshRenderer renderer = go.GetComponent<MeshRenderer>();
+
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            renderer.receiveShadows = true;
+
+            Material uniqueMat = new Material(matBase);
+            uniqueMat.renderQueue = matBase.renderQueue + (i % 2000);
+            renderer.material = uniqueMat;
+
             istanzeGPU.Add(go);
+
+            // Ogni volta che arriva a 150 sfere, aspetta il frame successivo
+            if (i % sferePerFrame == 0 && i > 0)
+            {
+                yield return null;
+            }
         }
-        //Debug.Log($"Attivato {label} - Oggetti: {numeroOggetti}");
+        Debug.Log($"<color=red>Stress GPU completato: {numeroOggetti} sfere caricate!</color>");
     }
 
     void AttivaStressFisica(int numeroOggetti, string label)
@@ -199,9 +235,9 @@ public class StressTester : MonoBehaviour
         numOggettiFisici = numeroOggetti;
         SetLabel(label);
 
-        PhysicMaterial highFrictionMat = new PhysicMaterial();
+        PhysicsMaterial highFrictionMat = new PhysicsMaterial();
         highFrictionMat.bounciness = 1f;
-        highFrictionMat.bounceCombine = PhysicMaterialCombine.Maximum;
+        highFrictionMat.bounceCombine = PhysicsMaterialCombine.Maximum;
 
         for (int i = 0; i < numeroOggetti; i++)
         {
@@ -213,7 +249,7 @@ public class StressTester : MonoBehaviour
             Rigidbody rb = go.AddComponent<Rigidbody>();
             rb.mass = 1f;
             rb.interpolation = RigidbodyInterpolation.Interpolate;
-            rb.collisionDetectionMode = CollisionDetectionMode.Continuous; // Forza calcoli fisici estremi
+            rb.collisionDetectionMode = CollisionDetectionMode.Continuous; // Forza calcoli fisici
 
             go.GetComponent<SphereCollider>().sharedMaterial = highFrictionMat;
 

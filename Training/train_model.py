@@ -37,22 +37,25 @@ if calibration_data.empty:
     exit()
 
 base_ft = calibration_data['FrameTime_ms'].median()
-base_batches = calibration_data['Batches_DrawCalls'].median()
+base_gpu = calibration_data['GPUTime_ms'].median()
 base_cpu = calibration_data['MainThreadTime_ms'].median()
+base_physics = calibration_data['PhysicsObjects'].median()
 base_mem = calibration_data['Memory_MB'].median()
 
-if base_batches == 0: base_batches = 1
+if base_gpu == 0: base_gpu = 1
 if base_cpu == 0: base_cpu = 1
+if base_physics == 0: base_physics = 1
 
 # Trasformazione in Delta e filtraggio
 df_train = df[df['Label'] != 'CALIBRATION'].copy()
 df_train['Delta_FT'] = df_train['FrameTime_ms'] / base_ft
-df_train['Delta_Batches'] = df_train['Batches_DrawCalls'] / base_batches
+df_train['Delta_GPU'] = df_train['GPUTime_ms'] / base_gpu
 df_train['Delta_CPU'] = df_train['MainThreadTime_ms'] / base_cpu
+df_train['Delta_Physics'] = df_train['PhysicsObjects'] / base_physics
 df_train['Delta_Mem'] = df_train['Memory_MB'] / base_mem
 
 # Selezione Feature e Target
-X = df_train[['Delta_FT', 'Delta_Batches', 'Delta_CPU', 'Delta_Mem']]
+X = df_train[['Delta_FT', 'Delta_GPU', 'Delta_CPU', 'Delta_Physics', 'Delta_Mem']]
 y = df_train['Label']
 
 # Divisione in training e test set (80% training, 20% test)

@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System.IO;
 using UnityEngine.Profiling;
+using Unity.Profiling;
 
 public class PerformanceLogger : MonoBehaviour
 {
@@ -12,6 +13,7 @@ public class PerformanceLogger : MonoBehaviour
     [HideInInspector] public string scenarioLabel = "CALIBRATION";
 
     private Recorder cpuRecorder;
+    private ProfilerRecorder gpuRecorder;
 
     void Awake()
     {
@@ -29,13 +31,15 @@ public class PerformanceLogger : MonoBehaviour
             cpuRecorder.enabled = true;
         }
 
+        gpuRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "GPU Frame Time");
+
         // Crea il file di log
         try
         {
             // Scrive l'intestazione
             if (!File.Exists(filePath))
             {
-                File.WriteAllText(filePath, "Label,Time_sec,FrameTime_ms,FPS,Batches_DrawCalls,MainThreadTime_ms,Memory_MB\n");
+                File.WriteAllText(filePath, "Label,Time_sec,FrameTime_ms,FPS,GPUTime_ms,MainThreadTime_ms,PhysicsObjects,Memory_MB\n");
             }
             UnityEngine.Debug.Log("<color=green>File CSV inizializzato con successo!</color>");
         }
@@ -43,6 +47,11 @@ public class PerformanceLogger : MonoBehaviour
         {
             UnityEngine.Debug.LogError("ERRORE CRITICO: Impossibile creare il file. " + e.Message);
         }
+    }
+
+    void OnDestroy()
+    {
+        if (gpuRecorder.Valid) gpuRecorder.Dispose();
     }
 
     void Update()
@@ -53,6 +62,32 @@ public class PerformanceLogger : MonoBehaviour
             LogData();
             timer = 0f;
         }
+    }
+
+    float GetGPUTime()
+    {
+        if (gpuRecorder.Valid && gpuRecorder.LastValue > 0)
+        {
+            return gpuRecorder.LastValue / 1000000f;
+        }
+        return 1.0f; // Valore di fallback se la GPU non ha ancora risposto
+    }
+
+    float GetPhysicsObjects()
+    {
+        Rigidbody[] rigidbodies = FindObjectsByType<Rigidbody>(FindObjectsInactive.Exclude);
+        int activeCount = 0;
+
+        foreach (Rigidbody rb in rigidbodies)
+        {
+            // Conta solo gli oggetti che stanno attivamente calcolando collisioni/gravità
+            if (!rb.IsSleeping())
+            {
+                activeCount++;
+            }
+        }
+
+        return activeCount > 0 ? (float)activeCount : 0.1f;
     }
 
     void LogData()
@@ -71,18 +106,16 @@ public class PerformanceLogger : MonoBehaviour
             cpuMainTime = frameTime * 0.7f;
         }
 
-        int batches = 0;
-#if UNITY_EDITOR
-        batches = UnityEditor.UnityStats.batches;
-#endif
+        float gpuTimeMs = GetGPUTime();
+        float physicsObjects = GetPhysicsObjects();
 
         float ramMB = System.GC.GetTotalMemory(false) / 1048576f;
         float vramMB = Profiler.GetAllocatedMemoryForGraphicsDriver() / 1048576f;
         float memoryMB = ramMB + vramMB;
 
         string riga = string.Format(System.Globalization.CultureInfo.InvariantCulture,
-            "{0},{1:F2},{2:F2},{3:F0},{4},{5:F2},{6:F2}\n", 
-            scenarioLabel, Time.timeSinceLevelLoad, frameTime, fps, batches, cpuMainTime, memoryMB);
+            "{0},{1:F2},{2:F2},{3:F0},{4:F2},{5:F2},{6:F2},{7:F2}\n", 
+            scenarioLabel, Time.timeSinceLevelLoad, frameTime, fps, gpuTimeMs, cpuMainTime, physicsObjects, memoryMB);
         
         try
         {
